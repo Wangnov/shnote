@@ -726,7 +726,7 @@ fn test_init_codex_updates_existing() {
     // Second init should update, not duplicate
     shnote_cmd()
         .env("HOME", temp_dir.path())
-        .args(["init", "codex"])
+        .args(["--lang", "zh", "init", "codex"])
         .assert()
         .success()
         .stdout(predicate::str::contains("更新"));
@@ -974,17 +974,39 @@ exit 0\n",
     fs::set_permissions(&curl, fs::Permissions::from_mode(0o755)).unwrap();
 
     let shasum = tools_dir.path().join("shasum");
-    // Must match `src/pueue_embed.rs` checksums for aarch64-apple-darwin (v4.0.1).
+    // Platform-specific checksums from src/pueue_embed.rs (v4.0.1)
+    #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+    let (pueue_sha, pueued_sha) = (
+        "4306f593b6a6b6db9d641889e33fe3a2effa6423888b8f82391fa57951ef1a9b",
+        "dc14a7873a4a474ae42e7a6ee5778c2af2d53049182ecaa2d061f4803f04bf23",
+    );
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let (pueue_sha, pueued_sha) = (
+        "25f07f7e93f916d6189acc11846aab6ebee975b0cc5867cf40a96b5c70f3b55c",
+        "3e50d3bfadd1e417c8561aed2c1f4371605e8002f7fd793f39045719af5436a8",
+    );
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    let (pueue_sha, pueued_sha) = (
+        "16aea6654b3915c6495bb2f456184fd7f3d418de3f74afb5eab04ae953cdfedf",
+        "8a97b176f55929e37cda49577b28b66ea345151adf766b9d8efa8c9d81525a0b",
+    );
+    #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+    let (pueue_sha, pueued_sha) = (
+        "666af79b5a0246efa61a8589e51a190e3174bf80ad1c78b264204e7d312d43a9",
+        "8d3811f2ad57ef72ed171f446f19676ef755e189286d1c31a1e478ed57465bdb",
+    );
     fs::write(
         &shasum,
-        "#!/bin/sh\n\
+        format!(
+            "#!/bin/sh\n\
 file=\"$3\"\n\
 case \"$file\" in\n\
-  *pueue) echo \"4306f593b6a6b6db9d641889e33fe3a2effa6423888b8f82391fa57951ef1a9b  $file\" ;;\n\
-  *pueued) echo \"dc14a7873a4a474ae42e7a6ee5778c2af2d53049182ecaa2d061f4803f04bf23  $file\" ;;\n\
-  *) echo \"4306f593b6a6b6db9d641889e33fe3a2effa6423888b8f82391fa57951ef1a9b  $file\" ;;\n\
+  *pueued) echo \"{pueued_sha}  $file\" ;;\n\
+  *pueue) echo \"{pueue_sha}  $file\" ;;\n\
+  *) echo \"{pueue_sha}  $file\" ;;\n\
 esac\n\
-exit 0\n",
+exit 0\n"
+        ),
     )
     .unwrap();
     fs::set_permissions(&shasum, fs::Permissions::from_mode(0o755)).unwrap();
