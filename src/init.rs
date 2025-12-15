@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
@@ -362,31 +362,106 @@ fn init_claude(i18n: &I18n) -> Result<()> {
         .and_then(parse_semver_from_text)
         .is_some_and(|v| v >= SemVer::new(2, 0, 64));
 
-    let target_file = if claude_supports_rules {
+    let old_claude_md = home.join(".claude").join("CLAUDE.md");
+
+    if claude_supports_rules {
         let rules_dir = home.join(".claude").join("rules");
         fs::create_dir_all(&rules_dir)
             .context(i18n.err_create_dir(&rules_dir.display().to_string()))?;
-        rules_dir.join("shnote.md")
+        let target_file = rules_dir.join("shnote.md");
+
+        // Check if old CLAUDE.md has shnote rules that need migration
+        let migrated = if old_claude_md.exists() {
+            migrate_shnote_rules(i18n, &old_claude_md, &target_file)?
+        } else {
+            false
+        };
+
+        if !migrated {
+            // No migration needed, just write the rules file
+            fs::write(&target_file, SHNOTE_RULES)
+                .context(i18n.err_write_file(&target_file.display().to_string()))?;
+        }
+
+        println!(
+            "{}",
+            i18n.init_claude_success(&target_file.display().to_string())
+        );
+        if migrated {
+            println!(
+                "{}",
+                i18n.init_migrated_from(&old_claude_md.display().to_string())
+            );
+            println!(
+                "{}",
+                i18n.init_old_rules_cleaned(&old_claude_md.display().to_string())
+            );
+        }
     } else {
         let claude_dir = home.join(".claude");
         fs::create_dir_all(&claude_dir)
             .context(i18n.err_create_dir(&claude_dir.display().to_string()))?;
-        claude_dir.join("CLAUDE.md")
-    };
-
-    if claude_supports_rules {
-        // Write rules file (overwrite)
-        fs::write(&target_file, SHNOTE_RULES)
-            .context(i18n.err_write_file(&target_file.display().to_string()))?;
-    } else {
+        let target_file = claude_dir.join("CLAUDE.md");
         append_rules(i18n, &target_file)?;
+        println!(
+            "{}",
+            i18n.init_claude_success(&target_file.display().to_string())
+        );
     }
 
-    println!(
-        "{}",
-        i18n.init_claude_success(&target_file.display().to_string())
-    );
     Ok(())
+}
+
+/// Migrate shnote rules from old CLAUDE.md to new rules file.
+/// Returns true if migration was performed, false if no old rules found.
+fn migrate_shnote_rules(i18n: &I18n, old_file: &Path, new_file: &Path) -> Result<bool> {
+    let content = fs::read_to_string(old_file)
+        .context(i18n.err_read_file(&old_file.display().to_string()))?;
+
+    // Check if shnote rules exist in old file
+    let Some(start_idx) = content.find(SHNOTE_MARKER_START) else {
+        return Ok(false);
+    };
+
+    // Extract the shnote rules content (between markers)
+    let rules_start = start_idx + SHNOTE_MARKER_START.len();
+    let rules_end = content[rules_start..]
+        .find(SHNOTE_MARKER_END)
+        .map(|i| rules_start + i)
+        .unwrap_or(content.len());
+
+    let old_rules = content[rules_start..rules_end].to_string();
+
+    // Write extracted rules to new file (use latest rules, not old content)
+    // This ensures we always have the latest version
+    fs::write(new_file, SHNOTE_RULES)
+        .context(i18n.err_write_file(&new_file.display().to_string()))?;
+
+    // Remove shnote rules from old file
+    let marker_end_idx = content
+        .find(SHNOTE_MARKER_END)
+        .map(|i| i + SHNOTE_MARKER_END.len())
+        .unwrap_or(content.len());
+
+    let mut new_content = String::new();
+    new_content.push_str(&content[..start_idx]);
+    new_content.push_str(&content[marker_end_idx..]);
+
+    // Trim trailing newlines that might have been left behind
+    let new_content = new_content.trim_end().to_string();
+
+    if new_content.is_empty() {
+        // If the file would be empty, just delete it
+        fs::remove_file(old_file).context(i18n.err_write_file(&old_file.display().to_string()))?;
+    } else {
+        fs::write(old_file, new_content)
+            .context(i18n.err_write_file(&old_file.display().to_string()))?;
+    }
+
+    // Suppress unused variable warning - we extract it for potential future use
+    let _ = old_rules;
+
+    Ok(true)
 }
 
 fn init_codex(i18n: &I18n) -> Result<()> {
@@ -825,6 +900,191 @@ mod tests {
         let err = init_claude(&i18n).unwrap_err();
         let err_debug = format!("{:?}", err);
         assert!(err_debug.contains("CLAUDE.md"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn init_claude_migrates_rules_from_old_claude_md() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        // Create old CLAUDE.md with shnote rules
+        let claude_dir = temp_dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).unwrap();
+        let old_claude_md = claude_dir.join("CLAUDE.md");
+        fs::write(
+            &old_claude_md,
+            format!(
+                "# My Claude Config\n\nSome content\n{}OLD SHNOTE RULES{}\n\nMore content",
+                SHNOTE_MARKER_START, SHNOTE_MARKER_END
+            ),
+        )
+        .unwrap();
+
+        // Simulate new claude version
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"Claude Code 2.0.64\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
+
+        let i18n = test_i18n();
+        init_claude(&i18n).unwrap();
+
+        // Check new rules file exists with latest content
+        let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
+        assert!(rules_file.exists());
+        let content = fs::read_to_string(&rules_file).unwrap();
+        assert_eq!(content, SHNOTE_RULES);
+
+        // Check old CLAUDE.md no longer has shnote rules
+        let old_content = fs::read_to_string(&old_claude_md).unwrap();
+        assert!(!old_content.contains(SHNOTE_MARKER_START));
+        assert!(!old_content.contains("OLD SHNOTE RULES"));
+        assert!(old_content.contains("# My Claude Config"));
+        assert!(old_content.contains("Some content"));
+        assert!(old_content.contains("More content"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn init_claude_deletes_empty_claude_md_after_migration() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        // Create old CLAUDE.md with only shnote rules
+        let claude_dir = temp_dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).unwrap();
+        let old_claude_md = claude_dir.join("CLAUDE.md");
+        fs::write(
+            &old_claude_md,
+            format!(
+                "{}OLD SHNOTE RULES{}",
+                SHNOTE_MARKER_START, SHNOTE_MARKER_END
+            ),
+        )
+        .unwrap();
+
+        // Simulate new claude version
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"Claude Code 2.0.64\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
+
+        let i18n = test_i18n();
+        init_claude(&i18n).unwrap();
+
+        // Check new rules file exists
+        let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
+        assert!(rules_file.exists());
+
+        // Check old CLAUDE.md was deleted (it would be empty)
+        assert!(!old_claude_md.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn init_claude_no_migration_when_old_claude_md_has_no_shnote() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        // Create old CLAUDE.md without shnote rules
+        let claude_dir = temp_dir.path().join(".claude");
+        fs::create_dir_all(&claude_dir).unwrap();
+        let old_claude_md = claude_dir.join("CLAUDE.md");
+        fs::write(&old_claude_md, "# My Claude Config\n\nSome other content").unwrap();
+
+        // Simulate new claude version
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"Claude Code 2.0.64\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
+
+        let i18n = test_i18n();
+        init_claude(&i18n).unwrap();
+
+        // Check new rules file exists with latest content
+        let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
+        assert!(rules_file.exists());
+        let content = fs::read_to_string(&rules_file).unwrap();
+        assert_eq!(content, SHNOTE_RULES);
+
+        // Check old CLAUDE.md is unchanged
+        let old_content = fs::read_to_string(&old_claude_md).unwrap();
+        assert_eq!(old_content, "# My Claude Config\n\nSome other content");
+    }
+
+    #[test]
+    fn migrate_shnote_rules_returns_false_when_no_markers() {
+        let i18n = test_i18n();
+        let temp_dir = TempDir::new().unwrap();
+        let old_file = temp_dir.path().join("old.md");
+        let new_file = temp_dir.path().join("new.md");
+
+        fs::write(&old_file, "Some content without markers").unwrap();
+
+        let migrated = migrate_shnote_rules(&i18n, &old_file, &new_file).unwrap();
+        assert!(!migrated);
+        assert!(!new_file.exists());
+    }
+
+    #[test]
+    fn migrate_shnote_rules_handles_missing_end_marker() {
+        let i18n = test_i18n();
+        let temp_dir = TempDir::new().unwrap();
+        let old_file = temp_dir.path().join("old.md");
+        let new_file = temp_dir.path().join("new.md");
+
+        // Missing end marker - should extract until end of file
+        fs::write(
+            &old_file,
+            format!("Before{}OLD RULES WITHOUT END", SHNOTE_MARKER_START),
+        )
+        .unwrap();
+
+        let migrated = migrate_shnote_rules(&i18n, &old_file, &new_file).unwrap();
+        assert!(migrated);
+        assert!(new_file.exists());
+
+        // Old file should have only "Before" (trimmed)
+        let old_content = fs::read_to_string(&old_file).unwrap();
+        assert_eq!(old_content, "Before");
+    }
+
+    #[test]
+    fn migrate_shnote_rules_errors_when_read_fails() {
+        let i18n = test_i18n();
+        let temp_dir = TempDir::new().unwrap();
+        let old_file = temp_dir.path().join("nonexistent.md");
+        let new_file = temp_dir.path().join("new.md");
+
+        let err = migrate_shnote_rules(&i18n, &old_file, &new_file).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_read_file(&old_file.display().to_string())));
+    }
+
+    #[test]
+    fn migrate_shnote_rules_errors_when_write_fails() {
+        let i18n = test_i18n();
+        let temp_dir = TempDir::new().unwrap();
+        let old_file = temp_dir.path().join("old.md");
+        // Make new_file a directory so write fails
+        let new_file = temp_dir.path().join("new.md");
+        fs::create_dir_all(&new_file).unwrap();
+
+        fs::write(
+            &old_file,
+            format!("Before{}RULES{}", SHNOTE_MARKER_START, SHNOTE_MARKER_END),
+        )
+        .unwrap();
+
+        let err = migrate_shnote_rules(&i18n, &old_file, &new_file).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_write_file(&new_file.display().to_string())));
     }
 
     #[test]

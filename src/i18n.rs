@@ -407,6 +407,20 @@ impl I18n {
         }
     }
 
+    pub fn init_migrated_from(&self, old_path: &str) -> String {
+        match self.lang {
+            Lang::En => format!("  (migrated from {old_path})"),
+            Lang::Zh => format!("  （已从 {old_path} 迁移）"),
+        }
+    }
+
+    pub fn init_old_rules_cleaned(&self, path: &str) -> String {
+        match self.lang {
+            Lang::En => format!("  (removed old rules from {path})"),
+            Lang::Zh => format!("  （已从 {path} 移除旧规则）"),
+        }
+    }
+
     pub fn init_tool_found(&self, tool: &str, path: &str, version: Option<&str>) -> String {
         let version_str = version.map(|v| format!(" {v}")).unwrap_or_default();
         match self.lang {
@@ -917,6 +931,12 @@ mod tests {
 
         assert!(!en.init_rules_appended().is_empty());
         assert!(!zh.init_rules_appended().is_empty());
+
+        assert!(en.init_migrated_from("/old/path").contains("/old/path"));
+        assert!(zh.init_migrated_from("/old/path").contains("/old/path"));
+
+        assert!(en.init_old_rules_cleaned("/old/path").contains("/old/path"));
+        assert!(zh.init_old_rules_cleaned("/old/path").contains("/old/path"));
 
         assert!(en
             .init_tool_found("claude", "/tmp/claude", Some("Claude Code 2.0.64"))

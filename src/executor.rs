@@ -820,9 +820,14 @@ mod tests {
         };
 
         let mut stdin_reader = std::io::Cursor::new("");
-        let code =
-            exec_script_with_reader(&i18n, &interpreter, args, ScriptType::Node, &mut stdin_reader)
-                .unwrap();
+        let code = exec_script_with_reader(
+            &i18n,
+            &interpreter,
+            args,
+            ScriptType::Node,
+            &mut stdin_reader,
+        )
+        .unwrap();
         assert_eq!(code, ExitCode::SUCCESS);
     }
 
@@ -842,9 +847,14 @@ mod tests {
 
         // Provide "exit 0" as the script content
         let mut stdin_reader = std::io::Cursor::new("exit 0");
-        let code =
-            exec_script_with_reader(&i18n, &interpreter, args, ScriptType::Node, &mut stdin_reader)
-                .unwrap();
+        let code = exec_script_with_reader(
+            &i18n,
+            &interpreter,
+            args,
+            ScriptType::Node,
+            &mut stdin_reader,
+        )
+        .unwrap();
         // Note: sh -e "exit 0" will fail because -e means "exit on error"
         // But we're testing the code path, not the actual execution result
         let _ = code;
