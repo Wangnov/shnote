@@ -83,10 +83,9 @@ get_target() {
     esac
 }
 
-# Get latest version from GitHub
+# Get latest version from GitHub (always direct, proxy doesn't support API)
 get_latest_version() {
-    local api_url
-    api_url=$(proxy_url "https://api.github.com/repos/${REPO}/releases/latest")
+    local api_url="https://api.github.com/repos/${REPO}/releases/latest"
 
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL "$api_url" | \

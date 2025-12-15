@@ -41,7 +41,7 @@ irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | 
 macOS / Linux:
 
 ```bash
-GITHUB_PROXY=https://ghfast.top curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | GITHUB_PROXY=https://ghfast.top sh
 ```
 
 Windows (PowerShell):

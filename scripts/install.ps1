@@ -38,10 +38,10 @@ function Get-ProxiedUrl($url) {
     return $url
 }
 
-# Get latest version from GitHub
+# Get latest version from GitHub (always direct, proxy doesn't support API)
 function Get-LatestVersion {
     try {
-        $apiUrl = Get-ProxiedUrl "https://api.github.com/repos/$Repo/releases/latest"
+        $apiUrl = "https://api.github.com/repos/$Repo/releases/latest"
         $response = Invoke-RestMethod -Uri $apiUrl
         return $response.tag_name
     }
