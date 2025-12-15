@@ -541,7 +541,7 @@ fn parse_semver_from_text(text: &str) -> Option<SemVer> {
     let start = text.find(|c: char| c.is_ascii_digit())?;
     let mut end = start;
     for (idx, c) in text[start..].char_indices() {
-        if c.is_ascii_digit() || c == '.' {
+        if matches!(c, '0'..='9' | '.') {
             end = start + idx + c.len_utf8();
         } else {
             break;
@@ -553,7 +553,11 @@ fn parse_semver_from_text(text: &str) -> Option<SemVer> {
     let raw = text[start..end].trim_matches('.');
 
     let mut parts = raw.split('.');
-    let major = parts.next()?.parse().ok()?;
+    // split() always yields at least one element, even for empty string
+    let major_str = parts
+        .next()
+        .expect("split always yields at least one element");
+    let major = major_str.parse().ok()?;
     let minor = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     let patch = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
     Some(SemVer {
@@ -609,6 +613,8 @@ mod tests {
         assert_eq!(parse_semver_from_text("no version here"), None);
         // Test version string with only dots returns None (line 553)
         assert_eq!(parse_semver_from_text("..."), None);
+        // Test version with number too large to parse as u32
+        assert_eq!(parse_semver_from_text("99999999999999999999.0.0"), None);
     }
 
     #[cfg(unix)]
@@ -631,6 +637,12 @@ mod tests {
 
         let result = get_tool_version(&script, "--version");
         assert_eq!(result, Some("version 1.2.3".to_string()));
+    }
+
+    #[test]
+    fn get_tool_version_returns_none_when_command_cannot_execute() {
+        let result = get_tool_version(&PathBuf::from("/nonexistent/tool"), "--version");
+        assert!(result.is_none());
     }
 
     #[test]
@@ -793,6 +805,28 @@ mod tests {
         ));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn init_claude_errors_when_append_rules_fails_for_old_claude() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        // Simulate old claude version
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"2.0.63\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
+
+        // Make CLAUDE.md a directory so append_rules fails
+        fs::create_dir_all(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
+
+        let i18n = test_i18n();
+        let err = init_claude(&i18n).unwrap_err();
+        let err_debug = format!("{:?}", err);
+        assert!(err_debug.contains("CLAUDE.md"));
+    }
+
     #[test]
     fn init_codex_errors_when_home_dir_missing() {
         let _lock = env_lock();
@@ -859,10 +893,7 @@ mod tests {
         let err = init_codex(&i18n).unwrap_err();
         // Check error chain contains the read error context (use Debug format to see full chain)
         let err_debug = format!("{:?}", err);
-        assert!(
-            err_debug.contains("AGENTS.md"),
-            "Error should mention the file: {err_debug}"
-        );
+        assert!(err_debug.contains("AGENTS.md"));
     }
 
     #[test]
@@ -877,10 +908,7 @@ mod tests {
         let err = init_gemini(&i18n).unwrap_err();
         // Check error chain contains the read error context (use Debug format to see full chain)
         let err_debug = format!("{:?}", err);
-        assert!(
-            err_debug.contains("GEMINI.md"),
-            "Error should mention the file: {err_debug}"
-        );
+        assert!(err_debug.contains("GEMINI.md"));
     }
 
     #[test]
@@ -914,10 +942,7 @@ mod tests {
         let err = append_rules(&i18n, &target_file).unwrap_err();
         // Check error chain contains the file path (use Debug format to see full chain)
         let err_debug = format!("{:?}", err);
-        assert!(
-            err_debug.contains("dir-as-file"),
-            "Error should mention the file: {err_debug}"
-        );
+        assert!(err_debug.contains("dir-as-file"));
     }
 
     #[cfg(unix)]

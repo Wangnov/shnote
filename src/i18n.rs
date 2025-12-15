@@ -21,7 +21,7 @@ impl Lang {
             .to_lowercase();
 
         // C/POSIX is not a real language, skip it to allow fallback
-        if raw == "c" || raw == "posix" {
+        if matches!(raw.as_str(), "c" | "posix") {
             return None;
         }
 
@@ -419,6 +419,248 @@ impl I18n {
         match self.lang {
             Lang::En => format!("! {tool} not found in PATH (rules will still be written)"),
             Lang::Zh => format!("! 未在 PATH 中找到 {tool}（仍会写入规则）"),
+        }
+    }
+
+    // === Help text translations (for clap runtime i18n) ===
+
+    // App level
+    pub fn help_app_about(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "A lightweight command wrapper that enforces WHAT/WHY documentation",
+            Lang::Zh => "轻量级命令包装器，强制执行 WHAT/WHY 文档记录",
+        }
+    }
+
+    // Global arguments
+    pub fn help_arg_what(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "What this task does (required for run/py/node/pip/npm/npx, must appear before subcommand)",
+            Lang::Zh => "这个任务做什么（run/py/node/pip/npm/npx 必需，必须在子命令之前）",
+        }
+    }
+
+    pub fn help_arg_why(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Why this task is being executed (required for run/py/node/pip/npm/npx, must appear before subcommand)",
+            Lang::Zh => "为什么执行这个任务（run/py/node/pip/npm/npx 必需，必须在子命令之前）",
+        }
+    }
+
+    pub fn help_arg_lang(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Language for messages (auto-detected by default)",
+            Lang::Zh => "消息语言（默认自动检测）",
+        }
+    }
+
+    // Subcommands
+    pub fn help_cmd_run(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Execute a shell command (passthrough)",
+            Lang::Zh => "执行 shell 命令（透传）",
+        }
+    }
+
+    pub fn help_cmd_py(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Execute a Python script",
+            Lang::Zh => "执行 Python 脚本",
+        }
+    }
+
+    pub fn help_cmd_node(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Execute a Node.js script",
+            Lang::Zh => "执行 Node.js 脚本",
+        }
+    }
+
+    pub fn help_cmd_pip(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Execute pip (Python package manager)",
+            Lang::Zh => "执行 pip（Python 包管理器）",
+        }
+    }
+
+    pub fn help_cmd_npm(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Execute npm (Node.js package manager)",
+            Lang::Zh => "执行 npm（Node.js 包管理器）",
+        }
+    }
+
+    pub fn help_cmd_npx(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Execute npx (Node.js package runner)",
+            Lang::Zh => "执行 npx（Node.js 包运行器）",
+        }
+    }
+
+    pub fn help_cmd_config(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Manage configuration",
+            Lang::Zh => "管理配置",
+        }
+    }
+
+    pub fn help_cmd_init(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Initialize shnote rules for AI tools",
+            Lang::Zh => "为 AI 工具初始化 shnote 规则",
+        }
+    }
+
+    pub fn help_cmd_setup(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Initialize environment (extract pueue binaries, etc.)",
+            Lang::Zh => "初始化环境（解压 pueue 二进制文件等）",
+        }
+    }
+
+    pub fn help_cmd_doctor(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Check environment dependencies (python/node/pueue)",
+            Lang::Zh => "检查环境依赖（python/node/pueue）",
+        }
+    }
+
+    pub fn help_cmd_completions(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Generate shell completion scripts",
+            Lang::Zh => "生成 shell 补全脚本",
+        }
+    }
+
+    // Config subcommands
+    pub fn help_cmd_config_get(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Get a configuration value",
+            Lang::Zh => "获取配置值",
+        }
+    }
+
+    pub fn help_cmd_config_set(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Set a configuration value",
+            Lang::Zh => "设置配置值",
+        }
+    }
+
+    pub fn help_cmd_config_list(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "List all configuration values",
+            Lang::Zh => "列出所有配置值",
+        }
+    }
+
+    pub fn help_cmd_config_reset(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Reset configuration to defaults",
+            Lang::Zh => "重置配置为默认值",
+        }
+    }
+
+    pub fn help_cmd_config_path(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Show configuration file path",
+            Lang::Zh => "显示配置文件路径",
+        }
+    }
+
+    // Init subcommands
+    pub fn help_cmd_init_claude(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Install shnote rules for Claude Code (>= 2.0.64: ~/.claude/rules/shnote.md; otherwise: ~/.claude/CLAUDE.md)",
+            Lang::Zh => "为 Claude Code 安装 shnote 规则（>= 2.0.64: ~/.claude/rules/shnote.md；否则: ~/.claude/CLAUDE.md）",
+        }
+    }
+
+    pub fn help_cmd_init_codex(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Install or update shnote rules for Codex (~/.codex/AGENTS.md)",
+            Lang::Zh => "为 Codex 安装或更新 shnote 规则（~/.codex/AGENTS.md）",
+        }
+    }
+
+    pub fn help_cmd_init_gemini(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Install or update shnote rules for Gemini (~/.gemini/GEMINI.md)",
+            Lang::Zh => "为 Gemini 安装或更新 shnote 规则（~/.gemini/GEMINI.md）",
+        }
+    }
+
+    // Script args
+    pub fn help_arg_code(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Inline script code",
+            Lang::Zh => "内联脚本代码",
+        }
+    }
+
+    pub fn help_arg_file(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Script file path",
+            Lang::Zh => "脚本文件路径",
+        }
+    }
+
+    pub fn help_arg_stdin(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Read script from stdin (supports heredoc)",
+            Lang::Zh => "从 stdin 读取脚本（支持 heredoc）",
+        }
+    }
+
+    pub fn help_arg_script_args(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Arguments passed to the script",
+            Lang::Zh => "传递给脚本的参数",
+        }
+    }
+
+    // Run/passthrough args
+    pub fn help_arg_command(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Command and arguments to execute",
+            Lang::Zh => "要执行的命令和参数",
+        }
+    }
+
+    pub fn help_arg_passthrough(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Arguments to pass through to the underlying command",
+            Lang::Zh => "传递给底层命令的参数",
+        }
+    }
+
+    // Config args
+    pub fn help_arg_config_key(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Configuration key (e.g., python, node, shell, language)",
+            Lang::Zh => "配置键（如 python、node、shell、language）",
+        }
+    }
+
+    pub fn help_arg_config_key_short(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Configuration key",
+            Lang::Zh => "配置键",
+        }
+    }
+
+    pub fn help_arg_config_value(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Configuration value",
+            Lang::Zh => "配置值",
+        }
+    }
+
+    // Completions args
+    pub fn help_arg_shell(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Shell to generate completions for",
+            Lang::Zh => "要生成补全脚本的 shell",
         }
     }
 }

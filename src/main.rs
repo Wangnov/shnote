@@ -4,6 +4,7 @@ mod doctor;
 mod executor;
 mod i18n;
 mod init;
+mod localize;
 mod pueue_embed;
 mod shell;
 #[cfg(test)]
@@ -13,7 +14,7 @@ use std::io::{self, Write};
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::CommandFactory;
+use clap::{CommandFactory, FromArgMatches};
 use clap_complete::{generate, Shell as CompletionShell};
 
 use crate::cli::{Cli, Command, ConfigAction, Shell};
@@ -21,14 +22,26 @@ use crate::config::Config;
 use crate::i18n::I18n;
 
 fn main() -> ExitCode {
-    let cli = cli::parse();
+    // 1. Pre-parse to extract --lang argument (if any)
+    let pre_args: Vec<String> = std::env::args().collect();
+    let lang_override = extract_lang_arg(&pre_args);
 
-    // Load config (ignore errors, use defaults)
+    // 2. Load config (ignore errors, use defaults)
     let config = Config::load().unwrap_or_default();
 
-    // Detect language
-    let lang = i18n::detect_lang(cli.lang.as_deref(), &config.i18n.language);
+    // 3. Detect language
+    let lang = i18n::detect_lang(lang_override.as_deref(), &config.i18n.language);
     let i18n = I18n::new(lang);
+
+    // 4. Get and localize Command
+    let cmd = Cli::command();
+    let cmd = localize::localize_command(cmd, &i18n);
+
+    // 5. Parse arguments with localized command
+    // Note: get_matches() handles all parsing errors (exits on failure),
+    // so from_arg_matches cannot fail with a valid ArgMatches.
+    let cli = Cli::from_arg_matches(&cmd.get_matches())
+        .expect("clap derive should match parsed arguments");
 
     // Validate --what/--why
     if let Err(e) = cli::validate_what_why(&i18n, &cli) {
@@ -157,6 +170,23 @@ fn handle_config(i18n: &I18n, args: cli::ConfigArgs) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Extract --lang argument from command line args before full parsing.
+///
+/// This is needed because we need to know the language before parsing to
+/// localize the help text. The --lang argument can appear anywhere in the
+/// command line as a global argument.
+fn extract_lang_arg(args: &[String]) -> Option<String> {
+    for (i, arg) in args.iter().enumerate() {
+        if arg == "--lang" {
+            return args.get(i + 1).cloned();
+        }
+        if let Some(lang) = arg.strip_prefix("--lang=") {
+            return Some(lang.to_string());
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -687,5 +717,38 @@ exit 0\n"
         let bin_dir = crate::config::shnote_bin_dir().unwrap();
         assert!(bin_dir.join(crate::config::pueue_binary_name()).exists());
         assert!(bin_dir.join(crate::config::pueued_binary_name()).exists());
+    }
+
+    #[test]
+    fn extract_lang_arg_with_equals_syntax() {
+        let args = vec![
+            "shnote".to_string(),
+            "--lang=zh".to_string(),
+            "doctor".to_string(),
+        ];
+        assert_eq!(extract_lang_arg(&args), Some("zh".to_string()));
+    }
+
+    #[test]
+    fn extract_lang_arg_with_space_syntax() {
+        let args = vec![
+            "shnote".to_string(),
+            "--lang".to_string(),
+            "en".to_string(),
+            "doctor".to_string(),
+        ];
+        assert_eq!(extract_lang_arg(&args), Some("en".to_string()));
+    }
+
+    #[test]
+    fn extract_lang_arg_not_present() {
+        let args = vec!["shnote".to_string(), "doctor".to_string()];
+        assert_eq!(extract_lang_arg(&args), None);
+    }
+
+    #[test]
+    fn extract_lang_arg_at_end_without_value() {
+        let args = vec!["shnote".to_string(), "--lang".to_string()];
+        assert_eq!(extract_lang_arg(&args), None);
     }
 }

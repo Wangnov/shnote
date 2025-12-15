@@ -195,10 +195,6 @@ pub enum InitTarget {
     Gemini,
 }
 
-pub fn parse() -> Cli {
-    Cli::parse()
-}
-
 pub fn validate_what_why(i18n: &I18n, cli: &Cli) -> anyhow::Result<()> {
     if let Some(cmd_name) = cli.command.what_why_command_name() {
         if cli.what.is_none() || cli.why.is_none() {
