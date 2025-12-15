@@ -1,12 +1,23 @@
 #!/bin/sh
 # shnote installer for Unix-like systems
 # Usage: curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+#
+# Environment variables:
+#   SHNOTE_INSTALL_DIR  - Installation directory (default: ~/.local/bin)
+#   SHNOTE_VERSION      - Specific version to install (default: latest)
+#   GITHUB_PROXY        - GitHub mirror/proxy URL for faster downloads in China
+#                         Find available proxies at: https://ghproxylist.com/
+#
+# Example with GitHub proxy (for users in China):
+#   GITHUB_PROXY=https://ghfast.top curl -fsSL ... | sh
 
 set -e
 
 # Configuration
 REPO="wangnov/shnote"
 INSTALL_DIR="${SHNOTE_INSTALL_DIR:-$HOME/.local/bin}"
+# GitHub proxy for accelerating downloads (e.g., https://ghproxy.top)
+GITHUB_PROXY="${GITHUB_PROXY:-}"
 
 # Colors
 RED='\033[0;31m'
@@ -25,6 +36,18 @@ warn() {
 error() {
     printf "${RED}[ERROR]${NC} %s\n" "$1" >&2
     exit 1
+}
+
+# Apply GitHub proxy to URL if configured
+proxy_url() {
+    local url="$1"
+    if [ -n "$GITHUB_PROXY" ]; then
+        # Remove trailing slash from proxy URL
+        local proxy="${GITHUB_PROXY%/}"
+        echo "${proxy}/${url}"
+    else
+        echo "$url"
+    fi
 }
 
 # Detect OS
@@ -62,12 +85,15 @@ get_target() {
 
 # Get latest version from GitHub
 get_latest_version() {
+    local api_url
+    api_url=$(proxy_url "https://api.github.com/repos/${REPO}/releases/latest")
+
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | \
+        curl -fsSL "$api_url" | \
             grep '"tag_name":' | \
             sed -E 's/.*"([^"]+)".*/\1/'
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO- "https://api.github.com/repos/${REPO}/releases/latest" | \
+        wget -qO- "$api_url" | \
             grep '"tag_name":' | \
             sed -E 's/.*"([^"]+)".*/\1/'
     else
@@ -113,8 +139,12 @@ download_and_install() {
     local version="$1"
     local target="$2"
     local artifact="shnote-${target}"
-    local url="https://github.com/${REPO}/releases/download/${version}/${artifact}"
-    local checksum_url="${url}.sha256"
+    local base_url="https://github.com/${REPO}/releases/download/${version}/${artifact}"
+    local url
+    local checksum_url
+
+    url=$(proxy_url "$base_url")
+    checksum_url=$(proxy_url "${base_url}.sha256")
 
     local tmp_dir
     tmp_dir=$(mktemp -d)
@@ -163,6 +193,11 @@ main() {
     target=$(get_target "$os" "$arch")
 
     info "Detected: ${os} ${arch} (${target})"
+
+    # Show proxy info if configured
+    if [ -n "$GITHUB_PROXY" ]; then
+        info "Using GitHub proxy: ${GITHUB_PROXY}"
+    fi
 
     local version="${SHNOTE_VERSION:-$(get_latest_version)}"
     [ -z "$version" ] && error "Failed to get latest version"

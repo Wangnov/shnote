@@ -21,13 +21,36 @@
 
 #### 一键安装
 
-```bash
-# macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+macOS / Linux:
 
-# Windows (PowerShell)
+```bash
+curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
 irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | iex
 ```
+
+<details>
+<summary>🇨🇳 国内用户（使用 GitHub 代理加速）</summary>
+
+可用代理列表：https://ghproxylist.com/
+
+macOS / Linux:
+
+```bash
+GITHUB_PROXY=https://ghfast.top curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
+$env:GITHUB_PROXY = "https://ghfast.top"; irm https://ghfast.top/https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | iex
+```
+
+</details>
 
 #### 从源码安装
 
@@ -41,6 +64,9 @@ shnote 支持通过 pueue 在后台运行长时间任务。安装 shnote 后运�
 
 ```bash
 shnote setup
+
+# 国内用户可使用代理加速
+GITHUB_PROXY=https://ghfast.top shnote setup
 ```
 
 这会将 pueue 和 pueued 安装到 `~/.shnote/bin/`。按提示将此目录添加到 PATH：
@@ -234,11 +260,15 @@ shnote completions powershell | Out-String | Invoke-Expression
 
 #### One-line Install
 
-```bash
-# macOS / Linux
-curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+macOS / Linux:
 
-# Windows (PowerShell)
+```bash
+curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+```
+
+Windows (PowerShell):
+
+```powershell
 irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | iex
 ```
 

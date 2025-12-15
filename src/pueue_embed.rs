@@ -199,10 +199,17 @@ fn download_binaries(i18n: &I18n, bin_dir: &Path) -> Result<()> {
     println!("{}", i18n.setup_downloading());
     println!();
 
+    let github_proxy = std::env::var("GITHUB_PROXY").ok();
     let base_url = format!(
         "https://github.com/Nukesor/pueue/releases/download/v{}/",
         PUEUE_VERSION
     );
+    let base_url = apply_github_proxy(&github_proxy, &base_url);
+
+    if github_proxy.is_some() {
+        println!("  Using GitHub proxy: {}", github_proxy.as_ref().unwrap());
+        println!();
+    }
 
     let (pueue_filename, pueued_filename) = get_release_filenames();
 
@@ -219,6 +226,17 @@ fn download_binaries(i18n: &I18n, bin_dir: &Path) -> Result<()> {
     println!("  ✓ pueued -> {}", pueued_path.display());
 
     Ok(())
+}
+
+/// Apply GitHub proxy prefix to URL if GITHUB_PROXY is set
+fn apply_github_proxy(proxy: &Option<String>, url: &str) -> String {
+    match proxy {
+        Some(p) => {
+            let proxy = p.trim_end_matches('/');
+            format!("{}/{}", proxy, url)
+        }
+        None => url.to_string(),
+    }
 }
 
 fn get_release_filenames() -> (&'static str, &'static str) {
@@ -483,6 +501,32 @@ mod tests {
         assert!(checksums::PUEUED_SHA256
             .chars()
             .all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn apply_github_proxy_without_proxy() {
+        let url = "https://github.com/example/file";
+        assert_eq!(apply_github_proxy(&None, url), url);
+    }
+
+    #[test]
+    fn apply_github_proxy_with_proxy() {
+        let proxy = Some("https://ghfast.top".to_string());
+        let url = "https://github.com/example/file";
+        assert_eq!(
+            apply_github_proxy(&proxy, url),
+            "https://ghfast.top/https://github.com/example/file"
+        );
+    }
+
+    #[test]
+    fn apply_github_proxy_strips_trailing_slash() {
+        let proxy = Some("https://ghfast.top/".to_string());
+        let url = "https://github.com/example/file";
+        assert_eq!(
+            apply_github_proxy(&proxy, url),
+            "https://ghfast.top/https://github.com/example/file"
+        );
     }
 
     fn test_i18n() -> I18n {

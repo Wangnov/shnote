@@ -1,11 +1,21 @@
 # shnote installer for Windows
 # Usage: irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | iex
+#
+# Environment variables:
+#   SHNOTE_INSTALL_DIR  - Installation directory (default: ~/.local/bin)
+#   SHNOTE_VERSION      - Specific version to install (default: latest)
+#   GITHUB_PROXY        - GitHub mirror/proxy URL for faster downloads in China
+#                         Find available proxies at: https://ghproxylist.com/
+#
+# Example with GitHub proxy (for users in China):
+#   $env:GITHUB_PROXY = "https://ghfast.top"; irm ... | iex
 
 $ErrorActionPreference = "Stop"
 
 # Configuration
 $Repo = "wangnov/shnote"
 $InstallDir = if ($env:SHNOTE_INSTALL_DIR) { $env:SHNOTE_INSTALL_DIR } else { "$env:USERPROFILE\.local\bin" }
+$GitHubProxy = if ($env:GITHUB_PROXY) { $env:GITHUB_PROXY.TrimEnd('/') } else { "" }
 
 function Write-Info($msg) {
     Write-Host "[INFO] $msg" -ForegroundColor Green
@@ -20,10 +30,19 @@ function Write-Err($msg) {
     exit 1
 }
 
+# Apply GitHub proxy to URL if configured
+function Get-ProxiedUrl($url) {
+    if ($GitHubProxy) {
+        return "$GitHubProxy/$url"
+    }
+    return $url
+}
+
 # Get latest version from GitHub
 function Get-LatestVersion {
     try {
-        $response = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest"
+        $apiUrl = Get-ProxiedUrl "https://api.github.com/repos/$Repo/releases/latest"
+        $response = Invoke-RestMethod -Uri $apiUrl
         return $response.tag_name
     }
     catch {
@@ -37,8 +56,9 @@ function Install-Shnote {
 
     $Target = "x86_64-pc-windows-msvc"
     $Artifact = "shnote-$Target.exe"
-    $Url = "https://github.com/$Repo/releases/download/$Version/$Artifact"
-    $ChecksumUrl = "$Url.sha256"
+    $BaseUrl = "https://github.com/$Repo/releases/download/$Version/$Artifact"
+    $Url = Get-ProxiedUrl $BaseUrl
+    $ChecksumUrl = Get-ProxiedUrl "$BaseUrl.sha256"
 
     $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString())
     New-Item -ItemType Directory -Path $TempDir | Out-Null
@@ -86,6 +106,10 @@ function Test-InPath {
 
 # Main
 Write-Info "Detected: Windows x86_64"
+
+if ($GitHubProxy) {
+    Write-Info "Using GitHub proxy: $GitHubProxy"
+}
 
 $Version = if ($env:SHNOTE_VERSION) { $env:SHNOTE_VERSION } else { Get-LatestVersion }
 if (!$Version) {
