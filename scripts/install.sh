@@ -107,9 +107,9 @@ download_file() {
     local output="$2"
 
     if command -v curl >/dev/null 2>&1; then
-        curl -fsSL -o "$output" "$url"
+        curl -fL --progress-bar -o "$output" "$url"
     elif command -v wget >/dev/null 2>&1; then
-        wget -qO "$output" "$url"
+        wget --show-progress -q -O "$output" "$url"
     else
         error "Neither curl nor wget found."
     fi
