@@ -206,8 +206,8 @@ fn download_binaries(i18n: &I18n, bin_dir: &Path) -> Result<()> {
     );
     let base_url = apply_github_proxy(&github_proxy, &base_url);
 
-    if github_proxy.is_some() {
-        println!("  Using GitHub proxy: {}", github_proxy.as_ref().unwrap());
+    if let Some(proxy) = &github_proxy {
+        println!("  Using GitHub proxy: {}", proxy);
         println!();
     }
 
