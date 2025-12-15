@@ -74,9 +74,7 @@ pub fn exec_pip(i18n: &I18n, config: &Config, args: PassthroughArgs) -> Result<E
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
 
-    let status = cmd
-        .status()
-        .context(i18n.err_failed_to_execute("pip"))?;
+    let status = cmd.status().context(i18n.err_failed_to_execute("pip"))?;
 
     Ok(exit_code_from_status(status))
 }
@@ -93,9 +91,7 @@ pub fn exec_npm(i18n: &I18n, config: &Config, args: PassthroughArgs) -> Result<E
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
 
-    let status = cmd
-        .status()
-        .context(i18n.err_failed_to_execute("npm"))?;
+    let status = cmd.status().context(i18n.err_failed_to_execute("npm"))?;
 
     Ok(exit_code_from_status(status))
 }
@@ -112,9 +108,7 @@ pub fn exec_npx(i18n: &I18n, config: &Config, args: PassthroughArgs) -> Result<E
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
 
-    let status = cmd
-        .status()
-        .context(i18n.err_failed_to_execute("npx"))?;
+    let status = cmd.status().context(i18n.err_failed_to_execute("npx"))?;
 
     Ok(exit_code_from_status(status))
 }
@@ -284,7 +278,12 @@ mod tests {
         };
         #[cfg(windows)]
         let args = RunArgs {
-            command: vec![OsString::from("cmd"), OsString::from("/C"), OsString::from("exit"), OsString::from("0")],
+            command: vec![
+                OsString::from("cmd"),
+                OsString::from("/C"),
+                OsString::from("exit"),
+                OsString::from("0"),
+            ],
         };
         let result = exec_run(&i18n, &config, args);
         assert!(result.is_ok());
@@ -381,7 +380,10 @@ mod tests {
         }
         #[cfg(windows)]
         {
-            let status = Command::new("cmd").args(["/C", "exit", "0"]).status().unwrap();
+            let status = Command::new("cmd")
+                .args(["/C", "exit", "0"])
+                .status()
+                .unwrap();
             let code = exit_code_from_status(status);
             assert_eq!(code, ExitCode::SUCCESS);
         }
@@ -398,7 +400,10 @@ mod tests {
         }
         #[cfg(windows)]
         {
-            let status = Command::new("cmd").args(["/C", "exit", "1"]).status().unwrap();
+            let status = Command::new("cmd")
+                .args(["/C", "exit", "1"])
+                .status()
+                .unwrap();
             let code = exit_code_from_status(status);
             assert_ne!(code, ExitCode::SUCCESS);
         }
@@ -473,7 +478,9 @@ mod tests {
         config.paths.node = node.display().to_string();
 
         let err = resolve_node_tool(&i18n, &config, "npm").unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_interpreter_not_found("npm")));
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_interpreter_not_found("npm")));
     }
 
     #[cfg(unix)]
@@ -539,7 +546,7 @@ mod tests {
 
         impl Read for FailingReader {
             fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-                Err(std::io::Error::new(std::io::ErrorKind::Other, "boom"))
+                Err(std::io::Error::other("boom"))
             }
         }
 
@@ -644,7 +651,9 @@ mod tests {
 
         let args = PassthroughArgs { args: vec![] };
         let err = exec_npm(&i18n, &config, args).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_interpreter_not_found("npm")));
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_interpreter_not_found("npm")));
     }
 
     #[cfg(unix)]
@@ -685,7 +694,9 @@ mod tests {
 
         let args = PassthroughArgs { args: vec![] };
         let err = exec_npx(&i18n, &config, args).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_interpreter_not_found("npx")));
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_interpreter_not_found("npx")));
     }
 
     #[cfg(unix)]
@@ -718,7 +729,9 @@ mod tests {
         let _path_guard = EnvVarGuard::set("PATH", empty_path.path());
 
         let err = resolve_interpreter(&i18n, "nope", &["also_nope"]).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_interpreter_not_found("nope")));
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_interpreter_not_found("nope")));
     }
 
     #[cfg(unix)]
@@ -727,7 +740,7 @@ mod tests {
         struct FailingReader;
         impl Read for FailingReader {
             fn read(&mut self, _buf: &mut [u8]) -> std::io::Result<usize> {
-                Err(std::io::Error::new(std::io::ErrorKind::Other, "boom"))
+                Err(std::io::Error::other("boom"))
             }
         }
 
@@ -764,14 +777,9 @@ mod tests {
         };
 
         let mut stdin_reader = std::io::Cursor::new("");
-        let code = exec_script_with_reader(
-            &i18n,
-            &interpreter,
-            args,
-            ScriptType::Py,
-            &mut stdin_reader,
-        )
-        .unwrap();
+        let code =
+            exec_script_with_reader(&i18n, &interpreter, args, ScriptType::Py, &mut stdin_reader)
+                .unwrap();
         assert_eq!(code, ExitCode::SUCCESS);
     }
 
@@ -788,8 +796,7 @@ mod tests {
             args: vec![],
         };
 
-        let err =
-            exec_script(&i18n, &interpreter, args, ScriptType::Py).unwrap_err();
+        let err = exec_script(&i18n, &interpreter, args, ScriptType::Py).unwrap_err();
         assert!(err
             .to_string()
             .contains(&i18n.err_failed_to_execute(&interpreter.display().to_string())));

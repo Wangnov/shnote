@@ -84,15 +84,15 @@ impl Config {
         }
         let contents = fs::read_to_string(&path)
             .context(format!("failed to read config file: {}", path.display()))?;
-        toml::from_str(&contents).context(format!("failed to parse config file: {}", path.display()))
+        toml::from_str(&contents)
+            .context(format!("failed to parse config file: {}", path.display()))
     }
 
     pub fn save(&self, i18n: &I18n) -> Result<()> {
         let parent = shnote_home()?;
         let path = parent.join("config.toml");
-        fs::create_dir_all(&parent).context(i18n.err_create_config_dir(
-            &parent.display().to_string(),
-        ))?;
+        fs::create_dir_all(&parent)
+            .context(i18n.err_create_config_dir(&parent.display().to_string()))?;
         #[allow(clippy::expect_used)]
         let msg = i18n.err_serialize_config();
         let contents = toml::to_string_pretty(self).expect(msg);
@@ -432,7 +432,9 @@ mod tests {
         let _userprofile_guard = EnvVarGuard::remove("USERPROFILE");
 
         let err = home_dir().unwrap_err();
-        assert!(err.to_string().contains("failed to determine home directory"));
+        assert!(err
+            .to_string()
+            .contains("failed to determine home directory"));
     }
 
     #[test]
@@ -442,7 +444,9 @@ mod tests {
         let _userprofile_guard = EnvVarGuard::remove("USERPROFILE");
 
         let err = Config::load().unwrap_err();
-        assert!(err.to_string().contains("failed to determine home directory"));
+        assert!(err
+            .to_string()
+            .contains("failed to determine home directory"));
     }
 
     #[test]
@@ -453,6 +457,8 @@ mod tests {
         let _userprofile_guard = EnvVarGuard::remove("USERPROFILE");
 
         let err = Config::default().save(&i18n).unwrap_err();
-        assert!(err.to_string().contains("failed to determine home directory"));
+        assert!(err
+            .to_string()
+            .contains("failed to determine home directory"));
     }
 }

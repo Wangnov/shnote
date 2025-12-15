@@ -263,7 +263,11 @@ mod tests {
     fn print_doctor_results_with_failures() {
         let i18n = test_i18n();
         let results = vec![
-            CheckResult::success("test1", PathBuf::from("/usr/bin/test"), Some("1.0".to_string())),
+            CheckResult::success(
+                "test1",
+                PathBuf::from("/usr/bin/test"),
+                Some("1.0".to_string()),
+            ),
             CheckResult::failure("test2", "not found"),
         ];
 
@@ -274,9 +278,11 @@ mod tests {
     #[test]
     fn print_doctor_results_all_success() {
         let i18n = test_i18n();
-        let results = vec![
-            CheckResult::success("test1", PathBuf::from("/usr/bin/test"), Some("1.0".to_string())),
-        ];
+        let results = vec![CheckResult::success(
+            "test1",
+            PathBuf::from("/usr/bin/test"),
+            Some("1.0".to_string()),
+        )];
 
         print_doctor_results(&i18n, &results);
     }

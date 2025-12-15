@@ -427,7 +427,9 @@ mod tests {
         });
 
         let err = run(&i18n, &config, cmd).unwrap_err();
-        assert!(err.to_string().contains("failed to determine home directory"));
+        assert!(err
+            .to_string()
+            .contains("failed to determine home directory"));
     }
 
     #[test]
@@ -520,7 +522,11 @@ mod tests {
 
         // Valid config that can be read, but make it read-only so save fails.
         let config_path = temp_dir.path().join(".shnote/config.toml");
-        fs::write(&config_path, toml::to_string_pretty(&Config::default()).unwrap()).unwrap();
+        fs::write(
+            &config_path,
+            toml::to_string_pretty(&Config::default()).unwrap(),
+        )
+        .unwrap();
         fs::set_permissions(&config_path, fs::Permissions::from_mode(0o444)).unwrap();
 
         let i18n = I18n::new(Lang::En);
@@ -552,9 +558,9 @@ mod tests {
         };
 
         let err = handle_config(&i18n, args).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_create_config_dir(
-            &temp_dir.path().join(".shnote").display().to_string()
-        )));
+        assert!(err.to_string().contains(
+            &i18n.err_create_config_dir(&temp_dir.path().join(".shnote").display().to_string())
+        ));
     }
 
     #[test]
@@ -569,7 +575,9 @@ mod tests {
         };
 
         let err = handle_config(&i18n, args).unwrap_err();
-        assert!(err.to_string().contains("failed to determine home directory"));
+        assert!(err
+            .to_string()
+            .contains("failed to determine home directory"));
     }
 
     #[test]
@@ -585,7 +593,7 @@ mod tests {
         });
 
         let err = run(&i18n, &config, cmd).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_home_dir()));
+        assert!(err.to_string().contains(i18n.err_home_dir()));
     }
 
     #[cfg(unix)]

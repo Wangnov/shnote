@@ -406,6 +406,21 @@ impl I18n {
             Lang::Zh => "  （规则已追加到文件）",
         }
     }
+
+    pub fn init_tool_found(&self, tool: &str, path: &str, version: Option<&str>) -> String {
+        let version_str = version.map(|v| format!(" {v}")).unwrap_or_default();
+        match self.lang {
+            Lang::En => format!("✓ Detected {tool}:{version_str} ({path})"),
+            Lang::Zh => format!("✓ 检测到 {tool}:{version_str}（{path}）"),
+        }
+    }
+
+    pub fn init_tool_not_found(&self, tool: &str) -> String {
+        match self.lang {
+            Lang::En => format!("! {tool} not found in PATH (rules will still be written)"),
+            Lang::Zh => format!("! 未在 PATH 中找到 {tool}（仍会写入规则）"),
+        }
+    }
 }
 
 pub fn detect_lang(cli_lang: Option<&str>, config_lang: &str) -> Lang {
@@ -660,6 +675,16 @@ mod tests {
 
         assert!(!en.init_rules_appended().is_empty());
         assert!(!zh.init_rules_appended().is_empty());
+
+        assert!(en
+            .init_tool_found("claude", "/tmp/claude", Some("Claude Code 2.0.64"))
+            .contains("claude"));
+        assert!(zh
+            .init_tool_found("claude", "/tmp/claude", Some("Claude Code 2.0.64"))
+            .contains("claude"));
+
+        assert!(en.init_tool_not_found("claude").contains("claude"));
+        assert!(zh.init_tool_not_found("claude").contains("claude"));
     }
 
     #[test]
@@ -685,8 +710,12 @@ mod tests {
         let en = I18n::new(Lang::En);
         let zh = I18n::new(Lang::Zh);
 
-        assert!(en.err_checksum_mismatch("/tmp", "abc", "def").contains("abc"));
-        assert!(zh.err_checksum_mismatch("/tmp", "abc", "def").contains("abc"));
+        assert!(en
+            .err_checksum_mismatch("/tmp", "abc", "def")
+            .contains("abc"));
+        assert!(zh
+            .err_checksum_mismatch("/tmp", "abc", "def")
+            .contains("abc"));
 
         assert!(!en.err_shasum_run().is_empty());
         assert!(!zh.err_shasum_run().is_empty());

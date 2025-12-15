@@ -174,7 +174,12 @@ fn install_binaries(
     }
 }
 
-fn extract_embedded_binaries(i18n: &I18n, bin_dir: &Path, pueue: &[u8], pueued: &[u8]) -> Result<()> {
+fn extract_embedded_binaries(
+    i18n: &I18n,
+    bin_dir: &Path,
+    pueue: &[u8],
+    pueued: &[u8],
+) -> Result<()> {
     println!("{}", i18n.setup_extracting());
 
     // Extract pueue
@@ -525,7 +530,9 @@ mod tests {
 
         let i18n = test_i18n();
         let err = run_setup(&i18n).unwrap_err();
-        assert!(err.to_string().contains("failed to determine home directory"));
+        assert!(err
+            .to_string()
+            .contains("failed to determine home directory"));
     }
 
     #[cfg(unix)]
@@ -551,11 +558,10 @@ mod tests {
         let not_a_dir = temp_dir.path().join("not_a_dir");
         fs::write(&not_a_dir, "file").unwrap();
 
-        let err =
-            extract_embedded_binaries(&i18n, &not_a_dir, b"pueue", b"pueued").unwrap_err();
-        assert!(err
-            .to_string()
-            .contains(&i18n.err_create_file(&not_a_dir.join(pueue_binary_name()).display().to_string())));
+        let err = extract_embedded_binaries(&i18n, &not_a_dir, b"pueue", b"pueued").unwrap_err();
+        assert!(err.to_string().contains(
+            &i18n.err_create_file(&not_a_dir.join(pueue_binary_name()).display().to_string())
+        ));
     }
 
     #[test]
@@ -774,8 +780,13 @@ exit 0
 
         let temp_dir = TempDir::new().unwrap();
         let dest = temp_dir.path().join("pueue");
-        let err = download_and_verify(&i18n, "https://example.invalid/pueue", &dest, "expectedhash")
-            .unwrap_err();
+        let err = download_and_verify(
+            &i18n,
+            "https://example.invalid/pueue",
+            &dest,
+            "expectedhash",
+        )
+        .unwrap_err();
 
         assert!(!dest.exists());
         assert!(err.to_string().contains("checksum"));
@@ -792,8 +803,8 @@ exit 0
         write_tool(&tools, "curl", "#!/bin/sh\nexit 1\n");
         let temp_dir = TempDir::new().unwrap();
         let dest = temp_dir.path().join("pueue");
-        let err = download_and_verify(&i18n, "https://example.invalid/pueue", &dest, "")
-            .unwrap_err();
+        let err =
+            download_and_verify(&i18n, "https://example.invalid/pueue", &dest, "").unwrap_err();
         assert!(err.to_string().contains(i18n.err_download_no_tool()));
     }
 
@@ -904,7 +915,9 @@ exit 0
         let temp_dir = TempDir::new().unwrap();
         let missing_parent = temp_dir.path().join("missing").join("pueue");
         let err = write_binary(&i18n, &missing_parent, b"data").unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_create_file(&missing_parent.display().to_string())));
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_create_file(&missing_parent.display().to_string())));
     }
 
     #[cfg(unix)]
@@ -921,7 +934,7 @@ exit 0
         struct FailingWriter;
         impl Write for FailingWriter {
             fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
-                Err(std::io::Error::new(std::io::ErrorKind::Other, "boom"))
+                Err(std::io::Error::other("boom"))
             }
             fn flush(&mut self) -> std::io::Result<()> {
                 Ok(())
@@ -932,7 +945,9 @@ exit 0
         let path = PathBuf::from("dummy");
         let mut writer = FailingWriter;
         let err = write_binary_with_writer(&i18n, &path, &mut writer, b"data").unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_write_file(&path.display().to_string())));
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_write_file(&path.display().to_string())));
         assert!(writer.flush().is_ok());
     }
 
@@ -949,7 +964,8 @@ exit 0
         fs::write(&shnote_home, "not a dir").unwrap();
 
         let err = run_setup(&i18n).unwrap_err();
-        let expected = i18n.err_create_dir(&temp_dir.path().join(".shnote/bin").display().to_string());
+        let expected =
+            i18n.err_create_dir(&temp_dir.path().join(".shnote/bin").display().to_string());
         assert!(err.to_string().contains(&expected));
     }
 }

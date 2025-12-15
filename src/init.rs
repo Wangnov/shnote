@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 use anyhow::{Context, Result};
+use which::which;
 
 use crate::cli::InitTarget;
 use crate::config::home_dir;
@@ -349,16 +351,36 @@ pub fn run_init(i18n: &I18n, target: InitTarget) -> Result<()> {
 }
 
 fn init_claude(i18n: &I18n) -> Result<()> {
+    let probe = probe_cli_tool(i18n, "claude");
     let home = home_dir().context(i18n.err_home_dir())?;
-    let rules_dir = home.join(".claude").join("rules");
-    let target_file = rules_dir.join("shnote.md");
 
-    // Create directory if needed
-    fs::create_dir_all(&rules_dir).context(i18n.err_create_dir(&rules_dir.display().to_string()))?;
+    // Claude Code >= 2.0.64 supports ~/.claude/rules/*.md.
+    // For older versions (or when version cannot be determined), append rules to ~/.claude/CLAUDE.md.
+    let claude_supports_rules = probe
+        .version
+        .as_deref()
+        .and_then(parse_semver_from_text)
+        .is_some_and(|v| v >= SemVer::new(2, 0, 64));
 
-    // Write rules file (overwrite)
-    fs::write(&target_file, SHNOTE_RULES)
-        .context(i18n.err_write_file(&target_file.display().to_string()))?;
+    let target_file = if claude_supports_rules {
+        let rules_dir = home.join(".claude").join("rules");
+        fs::create_dir_all(&rules_dir)
+            .context(i18n.err_create_dir(&rules_dir.display().to_string()))?;
+        rules_dir.join("shnote.md")
+    } else {
+        let claude_dir = home.join(".claude");
+        fs::create_dir_all(&claude_dir)
+            .context(i18n.err_create_dir(&claude_dir.display().to_string()))?;
+        claude_dir.join("CLAUDE.md")
+    };
+
+    if claude_supports_rules {
+        // Write rules file (overwrite)
+        fs::write(&target_file, SHNOTE_RULES)
+            .context(i18n.err_write_file(&target_file.display().to_string()))?;
+    } else {
+        append_rules(i18n, &target_file)?;
+    }
 
     println!(
         "{}",
@@ -368,12 +390,14 @@ fn init_claude(i18n: &I18n) -> Result<()> {
 }
 
 fn init_codex(i18n: &I18n) -> Result<()> {
+    let _ = probe_cli_tool(i18n, "codex");
     let home = home_dir().context(i18n.err_home_dir())?;
     let codex_dir = home.join(".codex");
     let target_file = codex_dir.join("AGENTS.md");
 
     // Create directory if needed
-    fs::create_dir_all(&codex_dir).context(i18n.err_create_dir(&codex_dir.display().to_string()))?;
+    fs::create_dir_all(&codex_dir)
+        .context(i18n.err_create_dir(&codex_dir.display().to_string()))?;
 
     append_rules(i18n, &target_file)?;
 
@@ -385,6 +409,7 @@ fn init_codex(i18n: &I18n) -> Result<()> {
 }
 
 fn init_gemini(i18n: &I18n) -> Result<()> {
+    let _ = probe_cli_tool(i18n, "gemini");
     let home = home_dir().context(i18n.err_home_dir())?;
     let gemini_dir = home.join(".gemini");
     let target_file = gemini_dir.join("GEMINI.md");
@@ -404,9 +429,8 @@ fn init_gemini(i18n: &I18n) -> Result<()> {
 
 fn append_rules(i18n: &I18n, target_file: &PathBuf) -> Result<()> {
     let mut content = if target_file.exists() {
-        fs::read_to_string(target_file).context(i18n.err_read_file(
-            &target_file.display().to_string(),
-        ))?
+        fs::read_to_string(target_file)
+            .context(i18n.err_read_file(&target_file.display().to_string()))?
     } else {
         String::new()
     };
@@ -437,7 +461,8 @@ fn append_rules(i18n: &I18n, target_file: &PathBuf) -> Result<()> {
         content.push_str(SHNOTE_RULES);
         content.push_str(SHNOTE_MARKER_END);
 
-        fs::write(target_file, content).context(i18n.err_write_file(&target_file.display().to_string()))?;
+        fs::write(target_file, content)
+            .context(i18n.err_write_file(&target_file.display().to_string()))?;
 
         println!("{}", i18n.init_rules_appended());
     }
@@ -445,10 +470,105 @@ fn append_rules(i18n: &I18n, target_file: &PathBuf) -> Result<()> {
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+struct ToolProbe {
+    #[allow(dead_code)]
+    tool: String,
+    #[allow(dead_code)]
+    path: Option<PathBuf>,
+    version: Option<String>,
+}
+
+fn probe_cli_tool(i18n: &I18n, tool: &str) -> ToolProbe {
+    let Ok(path) = which(tool) else {
+        println!("{}", i18n.init_tool_not_found(tool));
+        return ToolProbe {
+            tool: tool.to_string(),
+            path: None,
+            version: None,
+        };
+    };
+
+    let version = get_tool_version(&path, "--version");
+    println!(
+        "{}",
+        i18n.init_tool_found(tool, &path.display().to_string(), version.as_deref())
+    );
+
+    ToolProbe {
+        tool: tool.to_string(),
+        path: Some(path),
+        version,
+    }
+}
+
+fn get_tool_version(path: &PathBuf, flag: &str) -> Option<String> {
+    let output = Command::new(path).arg(flag).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    let version_str = if stdout.trim().is_empty() {
+        stderr.trim()
+    } else {
+        stdout.trim()
+    };
+
+    version_str.lines().next().map(|s| s.to_string())
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+struct SemVer {
+    major: u64,
+    minor: u64,
+    patch: u64,
+}
+
+impl SemVer {
+    const fn new(major: u64, minor: u64, patch: u64) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+        }
+    }
+}
+
+fn parse_semver_from_text(text: &str) -> Option<SemVer> {
+    let start = text.find(|c: char| c.is_ascii_digit())?;
+    let mut end = start;
+    for (idx, c) in text[start..].char_indices() {
+        if c.is_ascii_digit() || c == '.' {
+            end = start + idx + c.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    // Since find() guarantees start points to a digit, and the loop includes
+    // that digit, raw will always contain at least one digit after trimming.
+    let raw = text[start..end].trim_matches('.');
+
+    let mut parts = raw.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    let patch = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
+    Some(SemVer {
+        major,
+        minor,
+        patch,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::i18n::Lang;
+    #[cfg(unix)]
+    use crate::test_support::write_executable;
     use crate::test_support::{env_lock, EnvVarGuard};
     use std::fs;
     use tempfile::TempDir;
@@ -470,6 +590,47 @@ mod tests {
     fn markers_are_valid() {
         assert!(SHNOTE_MARKER_START.contains("shnote"));
         assert!(SHNOTE_MARKER_END.contains("shnote"));
+    }
+
+    #[test]
+    fn parse_semver_from_text_parses_first_version_token() {
+        assert_eq!(
+            parse_semver_from_text("2.0.69 (Claude Code)"),
+            Some(SemVer::new(2, 0, 69))
+        );
+        assert_eq!(
+            parse_semver_from_text("codex-cli 0.72.0"),
+            Some(SemVer::new(0, 72, 0))
+        );
+        assert_eq!(
+            parse_semver_from_text("v2.0.64"),
+            Some(SemVer::new(2, 0, 64))
+        );
+        assert_eq!(parse_semver_from_text("no version here"), None);
+        // Test version string with only dots returns None (line 553)
+        assert_eq!(parse_semver_from_text("..."), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn get_tool_version_returns_none_on_nonzero_exit() {
+        let temp_dir = TempDir::new().unwrap();
+        let script = temp_dir.path().join("fail-tool");
+        write_executable(&script, "#!/bin/sh\necho 'version 1.0.0'\nexit 1\n").unwrap();
+
+        let result = get_tool_version(&script, "--version");
+        assert!(result.is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn get_tool_version_uses_stderr_when_stdout_empty() {
+        let temp_dir = TempDir::new().unwrap();
+        let script = temp_dir.path().join("stderr-tool");
+        write_executable(&script, "#!/bin/sh\necho 'version 1.2.3' >&2\nexit 0\n").unwrap();
+
+        let result = get_tool_version(&script, "--version");
+        assert_eq!(result, Some("version 1.2.3".to_string()));
     }
 
     #[test]
@@ -512,11 +673,16 @@ mod tests {
         assert!(content.contains(SHNOTE_RULES));
     }
 
+    #[cfg(unix)]
     #[test]
-    fn init_claude_creates_file() {
+    fn init_claude_writes_rules_file_when_claude_is_new_enough() {
         let _lock = env_lock();
         let temp_dir = TempDir::new().unwrap();
         let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"Claude Code 2.0.64\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         let i18n = test_i18n();
         init_claude(&i18n).unwrap();
@@ -528,6 +694,48 @@ mod tests {
     }
 
     #[test]
+    fn init_claude_appends_to_claude_md_when_claude_not_found() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+        let tools_dir = TempDir::new().unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
+
+        let i18n = test_i18n();
+        init_claude(&i18n).unwrap();
+
+        let target_file = temp_dir.path().join(".claude/CLAUDE.md");
+        assert!(target_file.exists());
+        let content = fs::read_to_string(target_file).unwrap();
+        assert!(content.contains(SHNOTE_MARKER_START));
+        assert!(content.contains(SHNOTE_MARKER_END));
+        assert!(content.contains("shnote"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn init_claude_appends_to_claude_md_when_claude_is_old() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"2.0.63\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
+
+        let i18n = test_i18n();
+        init_claude(&i18n).unwrap();
+
+        let target_file = temp_dir.path().join(".claude/CLAUDE.md");
+        assert!(target_file.exists());
+        let content = fs::read_to_string(target_file).unwrap();
+        assert!(content.contains(SHNOTE_MARKER_START));
+        assert!(content.contains(SHNOTE_MARKER_END));
+        assert!(content.contains("shnote"));
+    }
+
+    #[test]
     fn init_claude_errors_when_home_dir_missing() {
         let _lock = env_lock();
         let _home_guard = EnvVarGuard::remove("HOME");
@@ -535,42 +743,54 @@ mod tests {
 
         let i18n = test_i18n();
         let err = init_claude(&i18n).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_home_dir()));
+        assert!(err.to_string().contains(i18n.err_home_dir()));
     }
 
+    #[cfg(unix)]
     #[test]
     fn init_claude_errors_when_create_dir_fails() {
         let _lock = env_lock();
         let temp_dir = TempDir::new().unwrap();
         let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"2.0.64\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         // Make ~/.claude a file so ~/.claude/rules cannot be created.
         fs::write(temp_dir.path().join(".claude"), "not a dir").unwrap();
 
         let i18n = test_i18n();
         let err = init_claude(&i18n).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_create_dir(
-            &temp_dir.path().join(".claude/rules").display().to_string()
-        )));
+        assert!(err.to_string().contains(
+            &i18n.err_create_dir(&temp_dir.path().join(".claude/rules").display().to_string())
+        ));
     }
 
+    #[cfg(unix)]
     #[test]
     fn init_claude_errors_when_write_fails() {
         let _lock = env_lock();
         let temp_dir = TempDir::new().unwrap();
         let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"2.0.64\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         fs::create_dir_all(temp_dir.path().join(".claude/rules/shnote.md")).unwrap();
 
         let i18n = test_i18n();
         let err = init_claude(&i18n).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_write_file(
-            &temp_dir
-                .path()
-                .join(".claude/rules/shnote.md")
-                .display()
-                .to_string()
-        )));
+        assert!(err.to_string().contains(
+            &i18n.err_write_file(
+                &temp_dir
+                    .path()
+                    .join(".claude/rules/shnote.md")
+                    .display()
+                    .to_string()
+            )
+        ));
     }
 
     #[test]
@@ -581,7 +801,7 @@ mod tests {
 
         let i18n = test_i18n();
         let err = init_codex(&i18n).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_home_dir()));
+        assert!(err.to_string().contains(i18n.err_home_dir()));
     }
 
     #[test]
@@ -592,7 +812,7 @@ mod tests {
 
         let i18n = test_i18n();
         let err = init_gemini(&i18n).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_home_dir()));
+        assert!(err.to_string().contains(i18n.err_home_dir()));
     }
 
     #[test]
@@ -606,9 +826,9 @@ mod tests {
 
         let i18n = test_i18n();
         let err = init_codex(&i18n).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_create_dir(
-            &temp_dir.path().join(".codex").display().to_string()
-        )));
+        assert!(err
+            .to_string()
+            .contains(&i18n.err_create_dir(&temp_dir.path().join(".codex").display().to_string())));
     }
 
     #[test]
@@ -622,9 +842,9 @@ mod tests {
 
         let i18n = test_i18n();
         let err = init_gemini(&i18n).unwrap_err();
-        assert!(err.to_string().contains(&i18n.err_create_dir(
-            &temp_dir.path().join(".gemini").display().to_string()
-        )));
+        assert!(err.to_string().contains(
+            &i18n.err_create_dir(&temp_dir.path().join(".gemini").display().to_string())
+        ));
     }
 
     #[test]

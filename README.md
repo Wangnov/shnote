@@ -122,7 +122,7 @@ shnote doctor
 shnote setup
 
 # 初始化 AI 工具规则
-shnote init claude   # 写入 ~/.claude/rules/shnote.md（覆盖）
+shnote init claude   # 会先检测 claude 版本：>= 2.0.64 写入 ~/.claude/rules/shnote.md（覆盖）；否则写入/更新 ~/.claude/CLAUDE.md（追加/替换标记区块）
 shnote init codex    # 写入/更新 ~/.codex/AGENTS.md（追加/替换标记区块）
 shnote init gemini   # 写入/更新 ~/.gemini/GEMINI.md（追加/替换标记区块）
 ```

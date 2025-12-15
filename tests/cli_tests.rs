@@ -313,14 +313,7 @@ fn test_py_stdin_reads_from_stdin_and_passes_args() {
     shnote_cmd()
         .env("HOME", temp_dir.path())
         .args([
-            "--what",
-            "test",
-            "--why",
-            "test",
-            "py",
-            "--stdin",
-            "arg0",
-            "arg1",
+            "--what", "test", "--why", "test", "py", "--stdin", "arg0", "arg1",
         ])
         .write_stdin("echo stdin-ok\n")
         .assert()
@@ -627,7 +620,9 @@ fn test_config_reset_errors_when_home_missing() {
         .args(["--lang", "en", "config", "reset"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("failed to determine home directory"));
+        .stderr(predicate::str::contains(
+            "failed to determine home directory",
+        ));
 }
 
 // === init command ===
@@ -636,6 +631,32 @@ fn test_init_claude() {
     let temp_dir = TempDir::new().unwrap();
     shnote_cmd()
         .env("HOME", temp_dir.path())
+        .env("PATH", temp_dir.path())
+        .args(["init", "claude"])
+        .assert()
+        .success();
+
+    let rules_file = temp_dir.path().join(".claude/CLAUDE.md");
+    assert!(rules_file.exists());
+    let content = fs::read_to_string(rules_file).unwrap();
+    assert!(content.contains("shnote rules start"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_init_claude_writes_rules_when_claude_new_enough() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new().unwrap();
+    let tools_dir = TempDir::new().unwrap();
+
+    let claude = tools_dir.path().join("claude");
+    fs::write(&claude, "#!/bin/sh\necho \"Claude Code 2.0.64\"\nexit 0\n").unwrap();
+    fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .env("PATH", tools_dir.path())
         .args(["init", "claude"])
         .assert()
         .success();
@@ -645,6 +666,31 @@ fn test_init_claude() {
     let content = fs::read_to_string(rules_file).unwrap();
     assert!(content.contains("shnote"));
     assert!(content.contains("--what"));
+}
+
+#[cfg(unix)]
+#[test]
+fn test_init_claude_writes_claude_md_when_claude_old() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp_dir = TempDir::new().unwrap();
+    let tools_dir = TempDir::new().unwrap();
+
+    let claude = tools_dir.path().join("claude");
+    fs::write(&claude, "#!/bin/sh\necho \"2.0.63\"\nexit 0\n").unwrap();
+    fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .env("PATH", tools_dir.path())
+        .args(["init", "claude"])
+        .assert()
+        .success();
+
+    let rules_file = temp_dir.path().join(".claude/CLAUDE.md");
+    assert!(rules_file.exists());
+    let content = fs::read_to_string(rules_file).unwrap();
+    assert!(content.contains("shnote rules start"));
 }
 
 #[test]
@@ -709,20 +755,30 @@ fn test_init_claude_errors_when_create_dir_fails() {
 
     shnote_cmd()
         .env("HOME", temp_dir.path())
+        .env("PATH", temp_dir.path())
         .args(["--lang", "en", "init", "claude"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("failed to create directory"));
 }
 
+#[cfg(unix)]
 #[test]
 fn test_init_claude_errors_when_write_fails() {
+    use std::os::unix::fs::PermissionsExt;
+
     let temp_dir = TempDir::new().unwrap();
     fs::create_dir_all(temp_dir.path().join(".claude/rules")).unwrap();
     fs::create_dir_all(temp_dir.path().join(".claude/rules/shnote.md")).unwrap();
 
+    let tools_dir = TempDir::new().unwrap();
+    let claude = tools_dir.path().join("claude");
+    fs::write(&claude, "#!/bin/sh\necho \"2.0.64\"\nexit 0\n").unwrap();
+    fs::set_permissions(&claude, fs::Permissions::from_mode(0o755)).unwrap();
+
     shnote_cmd()
         .env("HOME", temp_dir.path())
+        .env("PATH", tools_dir.path())
         .args(["--lang", "en", "init", "claude"])
         .assert()
         .failure()
@@ -791,7 +847,9 @@ fn test_init_errors_when_home_missing() {
         .args(["init", "claude"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("failed to determine home directory"));
+        .stderr(predicate::str::contains(
+            "failed to determine home directory",
+        ));
 }
 
 #[test]
@@ -802,7 +860,9 @@ fn test_init_codex_errors_when_home_missing() {
         .args(["init", "codex"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("failed to determine home directory"));
+        .stderr(predicate::str::contains(
+            "failed to determine home directory",
+        ));
 }
 
 #[test]
@@ -813,7 +873,9 @@ fn test_init_gemini_errors_when_home_missing() {
         .args(["init", "gemini"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("failed to determine home directory"));
+        .stderr(predicate::str::contains(
+            "failed to determine home directory",
+        ));
 }
 
 // === doctor command ===
@@ -1011,7 +1073,9 @@ fn test_what_why_on_non_exec_command() {
 #[test]
 fn test_what_why_on_non_exec_command_english() {
     shnote_cmd()
-        .args(["--lang", "en", "--what", "test", "--why", "test", "config", "list"])
+        .args([
+            "--lang", "en", "--what", "test", "--why", "test", "config", "list",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("only accepted"));

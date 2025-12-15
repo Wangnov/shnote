@@ -72,11 +72,9 @@ impl Command {
             Self::Pip(_) => Some("pip"),
             Self::Npm(_) => Some("npm"),
             Self::Npx(_) => Some("npx"),
-            Self::Config(_)
-            | Self::Init(_)
-            | Self::Setup
-            | Self::Doctor
-            | Self::Completions(_) => None,
+            Self::Config(_) | Self::Init(_) | Self::Setup | Self::Doctor | Self::Completions(_) => {
+                None
+            }
         }
     }
 
@@ -187,7 +185,7 @@ pub struct InitArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum InitTarget {
-    /// Install shnote rules for Claude Code (~/.claude/rules/shnote.md)
+    /// Install shnote rules for Claude Code (>= 2.0.64: ~/.claude/rules/shnote.md; otherwise: ~/.claude/CLAUDE.md)
     Claude,
 
     /// Install or update shnote rules for Codex (~/.codex/AGENTS.md)
