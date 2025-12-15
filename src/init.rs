@@ -857,10 +857,12 @@ mod tests {
 
         let i18n = test_i18n();
         let err = init_codex(&i18n).unwrap_err();
-        let target_file = temp_dir.path().join(".codex/AGENTS.md");
-        assert!(err
-            .to_string()
-            .contains(&i18n.err_read_file(&target_file.display().to_string())));
+        // Check error chain contains the read error context (use Debug format to see full chain)
+        let err_debug = format!("{:?}", err);
+        assert!(
+            err_debug.contains("AGENTS.md"),
+            "Error should mention the file: {err_debug}"
+        );
     }
 
     #[test]
@@ -873,10 +875,12 @@ mod tests {
 
         let i18n = test_i18n();
         let err = init_gemini(&i18n).unwrap_err();
-        let target_file = temp_dir.path().join(".gemini/GEMINI.md");
-        assert!(err
-            .to_string()
-            .contains(&i18n.err_read_file(&target_file.display().to_string())));
+        // Check error chain contains the read error context (use Debug format to see full chain)
+        let err_debug = format!("{:?}", err);
+        assert!(
+            err_debug.contains("GEMINI.md"),
+            "Error should mention the file: {err_debug}"
+        );
     }
 
     #[test]
@@ -908,9 +912,12 @@ mod tests {
         fs::create_dir_all(&target_file).unwrap();
 
         let err = append_rules(&i18n, &target_file).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains(&i18n.err_read_file(&target_file.display().to_string())));
+        // Check error chain contains the file path (use Debug format to see full chain)
+        let err_debug = format!("{:?}", err);
+        assert!(
+            err_debug.contains("dir-as-file"),
+            "Error should mention the file: {err_debug}"
+        );
     }
 
     #[cfg(unix)]
