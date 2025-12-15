@@ -1,0 +1,9 @@
+/target
+Cargo.lock
+/docs
+.DS_Store
+.claude/
+.DS_Store
+/.claude
+/.codex
+/.gemini
