@@ -84,7 +84,16 @@ pub fn exec_pip(i18n: &I18n, config: &Config, args: PassthroughArgs) -> Result<E
 pub fn exec_npm(i18n: &I18n, config: &Config, args: PassthroughArgs) -> Result<ExitCode> {
     let npm = resolve_node_tool(i18n, config, "npm")?;
 
+    // On Windows, .cmd files must be executed through cmd.exe
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg(&npm);
+        c
+    };
+    #[cfg(not(windows))]
     let mut cmd = Command::new(&npm);
+
     cmd.args(&args.args);
 
     cmd.stdin(Stdio::inherit());
@@ -101,7 +110,16 @@ pub fn exec_npm(i18n: &I18n, config: &Config, args: PassthroughArgs) -> Result<E
 pub fn exec_npx(i18n: &I18n, config: &Config, args: PassthroughArgs) -> Result<ExitCode> {
     let npx = resolve_node_tool(i18n, config, "npx")?;
 
+    // On Windows, .cmd files must be executed through cmd.exe
+    #[cfg(windows)]
+    let mut cmd = {
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg(&npx);
+        c
+    };
+    #[cfg(not(windows))]
     let mut cmd = Command::new(&npx);
+
     cmd.args(&args.args);
 
     cmd.stdin(Stdio::inherit());

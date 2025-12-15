@@ -299,6 +299,7 @@ fn test_py_file() {
         .stdout(predicate::str::contains("from file"));
 }
 
+#[cfg(unix)]
 #[test]
 fn test_py_stdin_reads_from_stdin_and_passes_args() {
     let temp_dir = TempDir::new().unwrap();
