@@ -251,6 +251,13 @@ impl I18n {
         }
     }
 
+    pub fn err_current_dir(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to determine current directory",
+            Lang::Zh => "无法确定当前目录",
+        }
+    }
+
     // Doctor error messages
     pub fn doctor_not_found_in_path(&self) -> &'static str {
         match self.lang {

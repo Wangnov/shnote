@@ -179,8 +179,23 @@ pub enum ConfigAction {
 
 #[derive(Args, Debug)]
 pub struct InitArgs {
+    /// Scope: user-level or project-level
+    #[arg(short = 's', long = "scope", default_value = "user")]
+    pub scope: Scope,
+
     #[command(subcommand)]
     pub target: InitTarget,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Scope {
+    /// User-level (writes to ~/.claude, ~/.codex, ~/.gemini)
+    #[default]
+    #[value(alias = "u")]
+    User,
+    /// Project-level (writes to .claude, .codex, .gemini in current directory)
+    #[value(alias = "p")]
+    Project,
 }
 
 #[derive(Subcommand, Debug)]

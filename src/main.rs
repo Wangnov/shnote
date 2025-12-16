@@ -90,7 +90,7 @@ fn run(i18n: &I18n, config: &Config, command: Command) -> Result<ExitCode> {
         }
 
         Command::Init(args) => {
-            init::run_init(i18n, args.target)?;
+            init::run_init(i18n, args.target, args.scope)?;
             Ok(ExitCode::SUCCESS)
         }
 
@@ -434,6 +434,7 @@ mod tests {
             &i18n,
             &config,
             Command::Init(cli::InitArgs {
+                scope: cli::Scope::User,
                 target: cli::InitTarget::Claude,
             }),
         )
@@ -619,6 +620,7 @@ mod tests {
         let i18n = I18n::new(Lang::En);
         let config = Config::default();
         let cmd = Command::Init(cli::InitArgs {
+            scope: cli::Scope::User,
             target: cli::InitTarget::Claude,
         });
 

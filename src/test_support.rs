@@ -1,5 +1,5 @@
 use std::ffi::{OsStr, OsString};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
 /// Global lock for tests that mutate process-wide environment variables.
@@ -40,6 +40,26 @@ impl Drop for EnvVarGuard {
             Some(v) => std::env::set_var(&self.key, v),
             None => std::env::remove_var(&self.key),
         }
+    }
+}
+
+/// RAII guard for current directory changes
+pub struct CurrentDirGuard {
+    prev: PathBuf,
+}
+
+impl CurrentDirGuard {
+    pub fn set(path: impl AsRef<Path>) -> std::io::Result<Self> {
+        let prev = std::env::current_dir()?;
+        std::env::set_current_dir(path)?;
+        Ok(Self { prev })
+    }
+}
+
+impl Drop for CurrentDirGuard {
+    fn drop(&mut self) {
+        // Ignore errors during drop - best effort restoration
+        let _ = std::env::set_current_dir(&self.prev);
     }
 }
 

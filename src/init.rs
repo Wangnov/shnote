@@ -5,7 +5,7 @@ use std::process::Command;
 use anyhow::{Context, Result};
 use which::which;
 
-use crate::cli::InitTarget;
+use crate::cli::{InitTarget, Scope};
 use crate::config::home_dir;
 use crate::i18n::I18n;
 
@@ -342,17 +342,25 @@ file2.txt
 const SHNOTE_MARKER_START: &str = "\n<!-- shnote rules start -->\n";
 const SHNOTE_MARKER_END: &str = "\n<!-- shnote rules end -->\n";
 
-pub fn run_init(i18n: &I18n, target: InitTarget) -> Result<()> {
+pub fn run_init(i18n: &I18n, target: InitTarget, scope: Scope) -> Result<()> {
     match target {
-        InitTarget::Claude => init_claude(i18n),
-        InitTarget::Codex => init_codex(i18n),
-        InitTarget::Gemini => init_gemini(i18n),
+        InitTarget::Claude => init_claude(i18n, scope),
+        InitTarget::Codex => init_codex(i18n, scope),
+        InitTarget::Gemini => init_gemini(i18n, scope),
     }
 }
 
-fn init_claude(i18n: &I18n) -> Result<()> {
+/// Get base directory for the given scope
+fn get_base_dir(i18n: &I18n, scope: Scope) -> Result<PathBuf> {
+    match scope {
+        Scope::User => home_dir().context(i18n.err_home_dir()),
+        Scope::Project => std::env::current_dir().context(i18n.err_current_dir()),
+    }
+}
+
+fn init_claude(i18n: &I18n, scope: Scope) -> Result<()> {
     let probe = probe_cli_tool(i18n, "claude");
-    let home = home_dir().context(i18n.err_home_dir())?;
+    let base = get_base_dir(i18n, scope)?;
 
     // Claude Code >= 2.0.64 supports ~/.claude/rules/*.md.
     // For older versions (or when version cannot be determined), append rules to ~/.claude/CLAUDE.md.
@@ -362,10 +370,10 @@ fn init_claude(i18n: &I18n) -> Result<()> {
         .and_then(parse_semver_from_text)
         .is_some_and(|v| v >= SemVer::new(2, 0, 64));
 
-    let old_claude_md = home.join(".claude").join("CLAUDE.md");
+    let old_claude_md = base.join(".claude").join("CLAUDE.md");
 
     if claude_supports_rules {
-        let rules_dir = home.join(".claude").join("rules");
+        let rules_dir = base.join(".claude").join("rules");
         fs::create_dir_all(&rules_dir)
             .context(i18n.err_create_dir(&rules_dir.display().to_string()))?;
         let target_file = rules_dir.join("shnote.md");
@@ -398,7 +406,7 @@ fn init_claude(i18n: &I18n) -> Result<()> {
             );
         }
     } else {
-        let claude_dir = home.join(".claude");
+        let claude_dir = base.join(".claude");
         fs::create_dir_all(&claude_dir)
             .context(i18n.err_create_dir(&claude_dir.display().to_string()))?;
         let target_file = claude_dir.join("CLAUDE.md");
@@ -464,10 +472,10 @@ fn migrate_shnote_rules(i18n: &I18n, old_file: &Path, new_file: &Path) -> Result
     Ok(true)
 }
 
-fn init_codex(i18n: &I18n) -> Result<()> {
+fn init_codex(i18n: &I18n, scope: Scope) -> Result<()> {
     let _ = probe_cli_tool(i18n, "codex");
-    let home = home_dir().context(i18n.err_home_dir())?;
-    let codex_dir = home.join(".codex");
+    let base = get_base_dir(i18n, scope)?;
+    let codex_dir = base.join(".codex");
     let target_file = codex_dir.join("AGENTS.md");
 
     // Create directory if needed
@@ -483,10 +491,10 @@ fn init_codex(i18n: &I18n) -> Result<()> {
     Ok(())
 }
 
-fn init_gemini(i18n: &I18n) -> Result<()> {
+fn init_gemini(i18n: &I18n, scope: Scope) -> Result<()> {
     let _ = probe_cli_tool(i18n, "gemini");
-    let home = home_dir().context(i18n.err_home_dir())?;
-    let gemini_dir = home.join(".gemini");
+    let base = get_base_dir(i18n, scope)?;
+    let gemini_dir = base.join(".gemini");
     let target_file = gemini_dir.join("GEMINI.md");
 
     // Create directory if needed
@@ -648,7 +656,7 @@ mod tests {
     use crate::i18n::Lang;
     #[cfg(unix)]
     use crate::test_support::write_executable;
-    use crate::test_support::{env_lock, EnvVarGuard};
+    use crate::test_support::{env_lock, CurrentDirGuard, EnvVarGuard};
     use std::fs;
     use tempfile::TempDir;
 
@@ -772,7 +780,7 @@ mod tests {
         let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         let i18n = test_i18n();
-        init_claude(&i18n).unwrap();
+        init_claude(&i18n, Scope::User).unwrap();
 
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
@@ -789,7 +797,7 @@ mod tests {
         let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         let i18n = test_i18n();
-        init_claude(&i18n).unwrap();
+        init_claude(&i18n, Scope::User).unwrap();
 
         let target_file = temp_dir.path().join(".claude/CLAUDE.md");
         assert!(target_file.exists());
@@ -812,7 +820,7 @@ mod tests {
         let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         let i18n = test_i18n();
-        init_claude(&i18n).unwrap();
+        init_claude(&i18n, Scope::User).unwrap();
 
         let target_file = temp_dir.path().join(".claude/CLAUDE.md");
         assert!(target_file.exists());
@@ -829,7 +837,7 @@ mod tests {
         let _userprofile_guard = EnvVarGuard::remove("USERPROFILE");
 
         let i18n = test_i18n();
-        let err = init_claude(&i18n).unwrap_err();
+        let err = init_claude(&i18n, Scope::User).unwrap_err();
         assert!(err.to_string().contains(i18n.err_home_dir()));
     }
 
@@ -848,7 +856,7 @@ mod tests {
         fs::write(temp_dir.path().join(".claude"), "not a dir").unwrap();
 
         let i18n = test_i18n();
-        let err = init_claude(&i18n).unwrap_err();
+        let err = init_claude(&i18n, Scope::User).unwrap_err();
         assert!(err.to_string().contains(
             &i18n.err_create_dir(&temp_dir.path().join(".claude/rules").display().to_string())
         ));
@@ -868,7 +876,7 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(".claude/rules/shnote.md")).unwrap();
 
         let i18n = test_i18n();
-        let err = init_claude(&i18n).unwrap_err();
+        let err = init_claude(&i18n, Scope::User).unwrap_err();
         assert!(err.to_string().contains(
             &i18n.err_write_file(
                 &temp_dir
@@ -897,7 +905,7 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(".claude/CLAUDE.md")).unwrap();
 
         let i18n = test_i18n();
-        let err = init_claude(&i18n).unwrap_err();
+        let err = init_claude(&i18n, Scope::User).unwrap_err();
         let err_debug = format!("{:?}", err);
         assert!(err_debug.contains("CLAUDE.md"));
     }
@@ -929,7 +937,7 @@ mod tests {
         let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         let i18n = test_i18n();
-        init_claude(&i18n).unwrap();
+        init_claude(&i18n, Scope::User).unwrap();
 
         // Check new rules file exists with latest content
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
@@ -973,7 +981,7 @@ mod tests {
         let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         let i18n = test_i18n();
-        init_claude(&i18n).unwrap();
+        init_claude(&i18n, Scope::User).unwrap();
 
         // Check new rules file exists
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
@@ -1003,7 +1011,7 @@ mod tests {
         let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
 
         let i18n = test_i18n();
-        init_claude(&i18n).unwrap();
+        init_claude(&i18n, Scope::User).unwrap();
 
         // Check new rules file exists with latest content
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
@@ -1094,7 +1102,7 @@ mod tests {
         let _userprofile_guard = EnvVarGuard::remove("USERPROFILE");
 
         let i18n = test_i18n();
-        let err = init_codex(&i18n).unwrap_err();
+        let err = init_codex(&i18n, Scope::User).unwrap_err();
         assert!(err.to_string().contains(i18n.err_home_dir()));
     }
 
@@ -1105,7 +1113,7 @@ mod tests {
         let _userprofile_guard = EnvVarGuard::remove("USERPROFILE");
 
         let i18n = test_i18n();
-        let err = init_gemini(&i18n).unwrap_err();
+        let err = init_gemini(&i18n, Scope::User).unwrap_err();
         assert!(err.to_string().contains(i18n.err_home_dir()));
     }
 
@@ -1119,7 +1127,7 @@ mod tests {
         fs::write(temp_dir.path().join(".codex"), "not a dir").unwrap();
 
         let i18n = test_i18n();
-        let err = init_codex(&i18n).unwrap_err();
+        let err = init_codex(&i18n, Scope::User).unwrap_err();
         assert!(err
             .to_string()
             .contains(&i18n.err_create_dir(&temp_dir.path().join(".codex").display().to_string())));
@@ -1135,7 +1143,7 @@ mod tests {
         fs::write(temp_dir.path().join(".gemini"), "not a dir").unwrap();
 
         let i18n = test_i18n();
-        let err = init_gemini(&i18n).unwrap_err();
+        let err = init_gemini(&i18n, Scope::User).unwrap_err();
         assert!(err.to_string().contains(
             &i18n.err_create_dir(&temp_dir.path().join(".gemini").display().to_string())
         ));
@@ -1150,7 +1158,7 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(".codex/AGENTS.md")).unwrap();
 
         let i18n = test_i18n();
-        let err = init_codex(&i18n).unwrap_err();
+        let err = init_codex(&i18n, Scope::User).unwrap_err();
         // Check error chain contains the read error context (use Debug format to see full chain)
         let err_debug = format!("{:?}", err);
         assert!(err_debug.contains("AGENTS.md"));
@@ -1165,7 +1173,7 @@ mod tests {
         fs::create_dir_all(temp_dir.path().join(".gemini/GEMINI.md")).unwrap();
 
         let i18n = test_i18n();
-        let err = init_gemini(&i18n).unwrap_err();
+        let err = init_gemini(&i18n, Scope::User).unwrap_err();
         // Check error chain contains the read error context (use Debug format to see full chain)
         let err_debug = format!("{:?}", err);
         assert!(err_debug.contains("GEMINI.md"));
@@ -1246,5 +1254,127 @@ mod tests {
         assert!(err
             .to_string()
             .contains(&i18n.err_write_file(&target_file.display().to_string())));
+    }
+
+    // Project scope tests
+    #[test]
+    fn init_claude_project_scope_writes_to_claude_md_when_claude_not_found() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+
+        // Change to temp directory using RAII guard
+        let _cwd_guard = CurrentDirGuard::set(temp_dir.path()).unwrap();
+
+        // Mock PATH to not find claude (so it falls back to CLAUDE.md)
+        let empty_dir = TempDir::new().unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", empty_dir.path());
+
+        let i18n = test_i18n();
+        init_claude(&i18n, Scope::Project).unwrap();
+
+        // Check that rules were written to project directory
+        let target_file = temp_dir.path().join(".claude/CLAUDE.md");
+        assert!(target_file.exists());
+        let content = fs::read_to_string(target_file).unwrap();
+        assert!(content.contains(SHNOTE_MARKER_START));
+        assert!(content.contains("shnote"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn init_claude_project_scope_writes_rules_when_claude_new_enough() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+
+        let _cwd_guard = CurrentDirGuard::set(temp_dir.path()).unwrap();
+
+        // Create a mock claude binary that returns version >= 2.0.64
+        let tools_dir = TempDir::new().unwrap();
+        let claude = tools_dir.path().join("claude");
+        write_executable(&claude, "#!/bin/sh\necho \"Claude Code 2.0.64\"\nexit 0\n").unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", tools_dir.path());
+
+        let i18n = test_i18n();
+        init_claude(&i18n, Scope::Project).unwrap();
+
+        // Check that rules were written to rules directory
+        let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
+        assert!(rules_file.exists());
+        let content = fs::read_to_string(rules_file).unwrap();
+        assert_eq!(content, SHNOTE_RULES);
+
+        // CLAUDE.md should not exist
+        let claude_md = temp_dir.path().join(".claude/CLAUDE.md");
+        assert!(!claude_md.exists());
+    }
+
+    #[test]
+    fn init_codex_project_scope_writes_to_current_dir() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+
+        let _cwd_guard = CurrentDirGuard::set(temp_dir.path()).unwrap();
+
+        // Mock PATH to not find codex
+        let empty_dir = TempDir::new().unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", empty_dir.path());
+
+        let i18n = test_i18n();
+        init_codex(&i18n, Scope::Project).unwrap();
+
+        let target_file = temp_dir.path().join(".codex/AGENTS.md");
+        assert!(target_file.exists());
+        let content = fs::read_to_string(target_file).unwrap();
+        assert!(content.contains(SHNOTE_MARKER_START));
+        assert!(content.contains("shnote"));
+    }
+
+    #[test]
+    fn init_gemini_project_scope_writes_to_current_dir() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+
+        let _cwd_guard = CurrentDirGuard::set(temp_dir.path()).unwrap();
+
+        // Mock PATH to not find gemini
+        let empty_dir = TempDir::new().unwrap();
+        let _path_guard = EnvVarGuard::set("PATH", empty_dir.path());
+
+        let i18n = test_i18n();
+        init_gemini(&i18n, Scope::Project).unwrap();
+
+        let target_file = temp_dir.path().join(".gemini/GEMINI.md");
+        assert!(target_file.exists());
+        let content = fs::read_to_string(target_file).unwrap();
+        assert!(content.contains(SHNOTE_MARKER_START));
+        assert!(content.contains("shnote"));
+    }
+
+    #[test]
+    fn get_base_dir_user_returns_home() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        let i18n = test_i18n();
+        let base = get_base_dir(&i18n, Scope::User).unwrap();
+        assert_eq!(base, temp_dir.path());
+    }
+
+    #[test]
+    fn get_base_dir_project_returns_current_dir() {
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+
+        let _cwd_guard = CurrentDirGuard::set(temp_dir.path()).unwrap();
+
+        let i18n = test_i18n();
+        let base = get_base_dir(&i18n, Scope::Project).unwrap();
+
+        // Use canonicalize to handle symlinks (e.g., /var -> /private/var on macOS)
+        assert_eq!(
+            base.canonicalize().unwrap(),
+            temp_dir.path().canonicalize().unwrap()
+        );
     }
 }
