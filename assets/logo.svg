@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <desc>shnote Project Logo V4 - Square terminal with sideways "A" (like > symbol) and "I" prompt.</desc>
+
+  <rect x="96" y="76" width="320" height="320" rx="40" fill="#2D2D2D"/>
+
+  <g stroke="#4AF626" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M 160 190 L 220 220 L 160 250"/> <line x1="185" y1="203" x2="185" y2="237"/>   <line x1="240" y1="250" x2="290" y2="250"/>
+  </g>
+
+  <g transform="rotate(-8 400 380)">
+    <rect x="320" y="300" width="160" height="160" rx="4" fill="#FCEE6D" stroke="#E5D75B" stroke-width="2"/>
+
+    <g stroke="#BDB357" stroke-width="10" stroke-linecap="round">
+      <line x1="350" y1="340" x2="450" y2="340"/>
+      <line x1="350" y1="375" x2="430" y2="375"/>
+      <path d="M350 410 L390 410"/>
+    </g>
+
+    <g>
+        <path d="M480 460 L430 460 L480 410 Z" fill="#D4C654"/>
+        <path d="M430 460 L480 460 L430 410 Z" fill="#FFFACD"/>
+    </g>
+  </g>
+</svg>

@@ -1,12 +1,32 @@
-# shnote
+<p align="center">
+  <img src="assets/logo.svg" alt="shnote logo" width="120">
+</p>
 
-[中文](#中文) | [English](#english)
+<h1 align="center">shnote</h1>
+
+<p align="center">
+  <a href="https://github.com/wangnov/shnote/actions/workflows/ci.yml"><img src="https://github.com/wangnov/shnote/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/wangnov/shnote/releases"><img src="https://img.shields.io/github/v/release/wangnov/shnote" alt="Release"></a>
+  <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform">
+  <img src="https://img.shields.io/badge/rust-1.74%2B-orange" alt="Rust">
+</p>
+
+<p align="center">
+  <img src="assets/shnote_promo.jpg" alt="shnote - From confusion to clarity" width="100%">
+</p>
+
+> 一个轻量级命令包装器，强制让 AI 在编写复杂命令的时候编写出该命令的 WHAT/WHY，方便用户直观快速地理解 AI Agent 编写的复杂命令（如临时编写的 Python 脚本）
+
+> A lightweight command wrapper that forces AI to document WHAT/WHY when writing complex commands, helping users quickly understand complex commands written by AI Agents (such as temporary Python scripts)
+
+<p align="center">
+  <a href="#介绍">中文</a> | <a href="#introduction">English</a>
+</p>
 
 ---
 
-## 中文
-
-`shnote` 是一个轻量级的命令包装器，强制在执行命令前记录 WHAT（做什么）和 WHY（为什么），输出协议化信息，方便用户直观快速地理解 AI Agent 执行的复杂命令（如临时的多行python脚本）。
+## 介绍
 
 ### 特性
 
@@ -243,7 +263,7 @@ shnote completions powershell | Out-String | Invoke-Expression
 
 ---
 
-## English
+## Introduction
 
 `shnote` is a lightweight command wrapper that enforces WHAT/WHY documentation before executing commands, producing structured output that makes it easy to understand complex commands (like temporary multi-line Python scripts) executed by AI Agents.
 
