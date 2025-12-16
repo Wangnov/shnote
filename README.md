@@ -37,9 +37,25 @@
 - **跨平台**：支持 macOS、Linux、Windows
 - **国际化**：支持中英双语帮助和消息
 
+### 效果展示
+
+在不同 AI 工具中使用 shnote 的实际效果：
+
+**Claude Code** - 用 Python 生成二维码，清晰显示命令意图
+
+<img src="assets/Chinese_example_claude.png" alt="Claude Code 示例" width="100%">
+
+**OpenAI Codex CLI** - 运行复杂 Node.js 脚本，一目了然
+
+<img src="assets/Chinese_example_codex.png" alt="Codex CLI 示例" width="100%">
+
+**Gemini CLI** - 执行复杂管道命令，不再困惑
+
+<img src="assets/Chinese_example_gemini.png" alt="Gemini CLI 示例" width="100%">
+
 ### 安装
 
-#### 一键安装
+#### 1. 安装 shnote
 
 macOS / Linux:
 
@@ -72,15 +88,58 @@ $env:GITHUB_PROXY = "https://ghfast.top"; irm https://ghfast.top/https://raw.git
 
 </details>
 
-#### 从源码安装
+<details>
+<summary>从源码安装</summary>
 
 ```bash
 cargo install --path .
 ```
 
-#### 安装 pueue（可选）
+</details>
 
-shnote 支持通过 pueue 在后台运行长时间任务。安装 shnote 后运行：
+#### 2. 初始化 AI 工具（必需）
+
+安装后，需要为你使用的 AI 工具初始化 shnote 规则：
+
+```bash
+# 根据你使用的 AI 工具选择一个或多个
+shnote init claude   # Claude Code
+shnote init codex    # OpenAI Codex CLI
+shnote init gemini   # Gemini CLI
+```
+
+**这一步做了什么？**
+
+将 shnote 的使用规则写入 AI 工具的**用户级 memory 文件**：
+
+| AI 工具 | 写入位置 |
+|---------|----------|
+| Claude Code (>= 2.0.64) | `~/.claude/rules/shnote.md` |
+| Claude Code (< 2.0.64) | `~/.claude/CLAUDE.md` |
+| OpenAI Codex CLI | `~/.codex/AGENTS.md` |
+| Gemini CLI | `~/.gemini/GEMINI.md` |
+
+AI 在执行命令时会读取这些规则，自动使用 shnote 并填写 WHAT/WHY。
+
+<details>
+<summary>💡 为什么不使用 Skills 方式？</summary>
+
+Skills 是 Claude Code 的另一种扩展机制，但 **Bash 工具的默认优先级高于 Skills**。当 AI 需要执行命令时，会优先使用内置的 Bash 工具而不是调用 Skill。
+
+因此，必须通过 memory 文件（rules/CLAUDE.md）进行提示词工程，在 AI 决定使用 Bash 之前就告诉它"应该用 shnote 包装命令"。
+
+</details>
+
+#### 3. 安装 pueue（可选）
+
+[pueue](https://github.com/Nukesor/pueue) 是一个命令行任务管理器，用于在后台运行长时间任务。
+
+**为什么需要 pueue？**
+
+- **Codex CLI / Gemini CLI**：没有内置的后台任务功能，长时间运行的命令会阻塞 AI，必须通过 pueue 放到后台
+- **Claude Code**：可以不使用 pueue，因为 Claude Code 有更好的设计（Background Bash 和 Async SubAgent）
+
+安装 pueue：
 
 ```bash
 shnote setup
@@ -95,6 +154,13 @@ GITHUB_PROXY=https://ghfast.top shnote setup
 # 添加到 ~/.bashrc 或 ~/.zshrc
 export PATH="$HOME/.shnote/bin:$PATH"
 ```
+
+<details>
+<summary>📸 pueue 使用示例（Codex CLI）</summary>
+
+<img src="assets/Chinese_pueue_codex.png" alt="pueue 使用示例" width="100%">
+
+</details>
 
 ### 用法
 
@@ -276,9 +342,25 @@ shnote completions powershell | Out-String | Invoke-Expression
 - **Cross-platform**: Supports macOS, Linux, Windows
 - **Internationalization**: Supports English and Chinese help/messages
 
+### Screenshots
+
+See shnote in action with different AI tools:
+
+**Claude Code** - Generate QR code with Python, intent clearly displayed
+
+<img src="assets/English_example_claude.png" alt="Claude Code Example" width="100%">
+
+**OpenAI Codex CLI** - Run complex Node.js scripts with clarity
+
+<img src="assets/English_example_codex.png" alt="Codex CLI Example" width="100%">
+
+**Gemini CLI** - Execute complex pipeline commands without confusion
+
+<img src="assets/English_example_gemini.png" alt="Gemini CLI Example" width="100%">
+
 ### Installation
 
-#### One-line Install
+#### 1. Install shnote
 
 macOS / Linux:
 
@@ -292,15 +374,58 @@ Windows (PowerShell):
 irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | iex
 ```
 
-#### From Source
+<details>
+<summary>From Source</summary>
 
 ```bash
 cargo install --path .
 ```
 
-#### Install pueue (Optional)
+</details>
 
-shnote supports running long-running tasks in the background via pueue. After installing shnote, run:
+#### 2. Initialize AI Tools (Required)
+
+After installation, initialize shnote rules for your AI tool:
+
+```bash
+# Choose one or more based on your AI tool
+shnote init claude   # Claude Code
+shnote init codex    # OpenAI Codex CLI
+shnote init gemini   # Gemini CLI
+```
+
+**What does this do?**
+
+Writes shnote usage rules to the AI tool's **user-level memory file**:
+
+| AI Tool | Write Location |
+|---------|----------------|
+| Claude Code (>= 2.0.64) | `~/.claude/rules/shnote.md` |
+| Claude Code (< 2.0.64) | `~/.claude/CLAUDE.md` |
+| OpenAI Codex CLI | `~/.codex/AGENTS.md` |
+| Gemini CLI | `~/.gemini/GEMINI.md` |
+
+The AI reads these rules when executing commands and will automatically use shnote with WHAT/WHY.
+
+<details>
+<summary>💡 Why not use Skills?</summary>
+
+Skills is another extension mechanism in Claude Code, but **the Bash tool has higher default priority than Skills**. When AI needs to execute commands, it prefers the built-in Bash tool over calling a Skill.
+
+Therefore, we must use memory files (rules/CLAUDE.md) for prompt engineering, telling the AI to "wrap commands with shnote" before it decides to use Bash.
+
+</details>
+
+#### 3. Install pueue (Optional)
+
+[pueue](https://github.com/Nukesor/pueue) is a command-line task manager for running long-running tasks in the background.
+
+**Why pueue?**
+
+- **Codex CLI / Gemini CLI**: No built-in background task support. Long-running commands block the AI and must be run via pueue
+- **Claude Code**: pueue is optional. Claude Code has better built-in solutions (Background Bash and Async SubAgent)
+
+Install pueue:
 
 ```bash
 shnote setup
@@ -312,6 +437,13 @@ This installs pueue and pueued to `~/.shnote/bin/`. Add this directory to your P
 # Add to ~/.bashrc or ~/.zshrc
 export PATH="$HOME/.shnote/bin:$PATH"
 ```
+
+<details>
+<summary>📸 pueue Usage Example (Codex CLI)</summary>
+
+<img src="assets/English_pueue_codex.png" alt="pueue usage example" width="100%">
+
+</details>
 
 ### Usage
 
