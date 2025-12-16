@@ -102,22 +102,29 @@ cargo install --path .
 安装后，需要为你使用的 AI 工具初始化 shnote 规则：
 
 ```bash
-# 根据你使用的 AI 工具选择一个或多个
+# 根据你使用的 AI 工具选择一个或多个（默认用户级）
 shnote init claude   # Claude Code
 shnote init codex    # OpenAI Codex CLI
 shnote init gemini   # Gemini CLI
+
+# 项目级初始化（写入当前目录）
+shnote init -s project claude   # 或 shnote init --scope p claude
 ```
 
 **这一步做了什么？**
 
-将 shnote 的使用规则写入 AI 工具的**用户级 memory 文件**：
+将 shnote 的使用规则写入 AI 工具的 **memory 文件**：
 
-| AI 工具 | 写入位置 |
-|---------|----------|
-| Claude Code (>= 2.0.64) | `~/.claude/rules/shnote.md` |
-| Claude Code (< 2.0.64) | `~/.claude/CLAUDE.md` |
-| OpenAI Codex CLI | `~/.codex/AGENTS.md` |
-| Gemini CLI | `~/.gemini/GEMINI.md` |
+| 范围 | AI 工具 | 写入位置 |
+|------|---------|----------|
+| user (默认) | Claude Code (>= 2.0.64) | `~/.claude/rules/shnote.md` |
+| user | Claude Code (< 2.0.64) | `~/.claude/CLAUDE.md` |
+| user | OpenAI Codex CLI | `~/.codex/AGENTS.md` |
+| user | Gemini CLI | `~/.gemini/GEMINI.md` |
+| project | Claude Code (>= 2.0.64) | `.claude/rules/shnote.md` |
+| project | Claude Code (< 2.0.64) | `.claude/CLAUDE.md` |
+| project | OpenAI Codex CLI | `.codex/AGENTS.md` |
+| project | Gemini CLI | `.gemini/GEMINI.md` |
 
 AI 在执行命令时会读取这些规则，自动使用 shnote 并填写 WHAT/WHY。
 
@@ -267,10 +274,14 @@ shnote doctor
 # macOS/Linux 依赖 curl（或 wget）与 shasum；Windows 使用 PowerShell 与 certutil
 shnote setup
 
-# 初始化 AI 工具规则
+# Initialize AI tool rules
 shnote init claude   # 会先检测 claude 版本：>= 2.0.64 写入 ~/.claude/rules/shnote.md（覆盖）；否则写入/更新 ~/.claude/CLAUDE.md（追加/替换标记区块）
 shnote init codex    # 写入/更新 ~/.codex/AGENTS.md（追加/替换标记区块）
 shnote init gemini   # 写入/更新 ~/.gemini/GEMINI.md（追加/替换标记区块）
+
+# 使用 --scope/-s 指定范围（user 或 project，可简写为 u 或 p）
+shnote init -s project claude   # 写入当前目录 .claude/CLAUDE.md
+shnote init --scope p codex     # 写入当前目录 .codex/AGENTS.md
 ```
 
 ### Shell 补全
@@ -388,22 +399,29 @@ cargo install --path .
 After installation, initialize shnote rules for your AI tool:
 
 ```bash
-# Choose one or more based on your AI tool
+# Choose one or more based on your AI tool (default: user-level)
 shnote init claude   # Claude Code
 shnote init codex    # OpenAI Codex CLI
 shnote init gemini   # Gemini CLI
+
+# Project-level initialization (writes to current directory)
+shnote init -s project claude   # or shnote init --scope p claude
 ```
 
 **What does this do?**
 
-Writes shnote usage rules to the AI tool's **user-level memory file**:
+Writes shnote usage rules to the AI tool's **memory file**:
 
-| AI Tool | Write Location |
-|---------|----------------|
-| Claude Code (>= 2.0.64) | `~/.claude/rules/shnote.md` |
-| Claude Code (< 2.0.64) | `~/.claude/CLAUDE.md` |
-| OpenAI Codex CLI | `~/.codex/AGENTS.md` |
-| Gemini CLI | `~/.gemini/GEMINI.md` |
+| Scope | AI Tool | Write Location |
+|-------|---------|----------------|
+| user (default) | Claude Code (>= 2.0.64) | `~/.claude/rules/shnote.md` |
+| user | Claude Code (< 2.0.64) | `~/.claude/CLAUDE.md` |
+| user | OpenAI Codex CLI | `~/.codex/AGENTS.md` |
+| user | Gemini CLI | `~/.gemini/GEMINI.md` |
+| project | Claude Code (>= 2.0.64) | `.claude/rules/shnote.md` |
+| project | Claude Code (< 2.0.64) | `.claude/CLAUDE.md` |
+| project | OpenAI Codex CLI | `.codex/AGENTS.md` |
+| project | Gemini CLI | `.gemini/GEMINI.md` |
 
 The AI reads these rules when executing commands and will automatically use shnote with WHAT/WHY.
 
@@ -554,6 +572,10 @@ shnote setup
 shnote init claude   # Detects claude version: >= 2.0.64 writes to ~/.claude/rules/shnote.md (overwrite); otherwise writes/updates ~/.claude/CLAUDE.md (append/replace marked section)
 shnote init codex    # Writes/updates ~/.codex/AGENTS.md (append/replace marked section)
 shnote init gemini   # Writes/updates ~/.gemini/GEMINI.md (append/replace marked section)
+
+# Use --scope/-s to specify scope (user or project, can be abbreviated as u or p)
+shnote init -s project claude   # Writes to .claude/CLAUDE.md in current directory
+shnote init --scope p codex     # Writes to .codex/AGENTS.md in current directory
 ```
 
 ### Shell Completion
