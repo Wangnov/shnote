@@ -1,0 +1,205 @@
+name: Test Install Scripts
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to install (leave empty for latest)'
+        required: false
+        default: ''
+      test_i18n:
+        description: 'Test i18n (zh/en)'
+        required: false
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - zh
+          - en
+
+jobs:
+  test-unix:
+    name: Test Unix (${{ matrix.os }}, ${{ matrix.lang }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        lang: [en, zh]
+        exclude:
+          - lang: ${{ github.event.inputs.test_i18n == 'zh' && 'en' || (github.event.inputs.test_i18n == 'en' && 'zh' || 'none') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set language environment
+        run: |
+          if [ "${{ matrix.lang }}" = "zh" ]; then
+            echo "SHNOTE_LANG=zh_CN.UTF-8" >> $GITHUB_ENV
+          else
+            echo "SHNOTE_LANG=en_US.UTF-8" >> $GITHUB_ENV
+          fi
+
+      - name: Test install script syntax
+        run: |
+          # Check shell script syntax
+          bash -n scripts/install.sh
+          echo "✓ Shell script syntax OK"
+
+      - name: Test install script (dry run - show messages)
+        run: |
+          echo "=== Testing i18n messages (${{ matrix.lang }}) ==="
+          # Source the script functions without running main
+          sed '/^main/d' scripts/install.sh > /tmp/install_funcs.sh
+          chmod +x /tmp/install_funcs.sh
+          . /tmp/install_funcs.sh
+
+          echo ""
+          echo "--- Language detected: $LANG_CODE ---"
+          echo ""
+          echo "Sample messages:"
+          echo "  info_detected: $(msg info_detected "linux" "x86_64" "x86_64-unknown-linux-musl")"
+          echo "  info_downloading: $(msg info_downloading "v0.1.0" "x86_64-unknown-linux-musl")"
+          echo "  info_verifying: $(msg info_verifying)"
+          echo "  info_success: $(msg info_success "v0.1.0")"
+          echo "  info_path_exists: $(msg info_path_exists)"
+          echo "  info_run_help: $(msg info_run_help)"
+          echo "  warn_restart: $(msg warn_restart)"
+          echo "  err_version_failed: $(msg err_version_failed)"
+
+      - name: Run actual install
+        if: github.event.inputs.version != '' || true
+        env:
+          SHNOTE_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          echo "=== Running actual install ==="
+          sh scripts/install.sh
+
+          echo ""
+          echo "=== Verify installation ==="
+          ls -la ~/.local/bin/shnote || echo "Binary not found in ~/.local/bin"
+
+          # Add to PATH for this step
+          export PATH="$HOME/.local/bin:$PATH"
+
+          echo ""
+          echo "=== Test shnote ==="
+          shnote --version
+          shnote --help | head -20
+
+  test-windows:
+    name: Test Windows (${{ matrix.lang }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        lang: [en, zh]
+        exclude:
+          - lang: ${{ github.event.inputs.test_i18n == 'zh' && 'en' || (github.event.inputs.test_i18n == 'en' && 'zh' || 'none') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set language environment
+        shell: pwsh
+        run: |
+          if ("${{ matrix.lang }}" -eq "zh") {
+            echo "SHNOTE_LANG=zh_CN.UTF-8" >> $env:GITHUB_ENV
+          } else {
+            echo "SHNOTE_LANG=en_US.UTF-8" >> $env:GITHUB_ENV
+          }
+
+      - name: Test install script syntax
+        shell: pwsh
+        run: |
+          # Parse the script to check for syntax errors
+          $null = [System.Management.Automation.Language.Parser]::ParseFile(
+            "$PWD\scripts\install.ps1",
+            [ref]$null,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            Write-Host "Syntax errors found:"
+            $errors | ForEach-Object { Write-Host $_.ToString() }
+            exit 1
+          }
+          Write-Host "✓ PowerShell script syntax OK"
+
+      - name: Test install script (dry run - show messages)
+        shell: pwsh
+        run: |
+          Write-Host "=== Testing i18n messages (${{ matrix.lang }}) ===" -ForegroundColor Cyan
+
+          # Load script without running main
+          $scriptContent = Get-Content scripts/install.ps1 -Raw
+          # Remove the main execution part (last few lines)
+          $scriptContent = $scriptContent -replace '(?s)# Main\r?\n.*$', ''
+
+          # Execute to load functions
+          Invoke-Expression $scriptContent
+
+          Write-Host ""
+          Write-Host "--- Language detected: $LangCode ---" -ForegroundColor Yellow
+          Write-Host ""
+          Write-Host "Sample messages:"
+          Write-Host "  info_detected: $(Get-Msg 'info_detected')"
+          Write-Host "  info_downloading: $(Get-Msg 'info_downloading' 'v0.1.0')"
+          Write-Host "  info_verifying: $(Get-Msg 'info_verifying')"
+          Write-Host "  info_success: $(Get-Msg 'info_success' 'v0.1.0')"
+          Write-Host "  info_path_exists: $(Get-Msg 'info_path_exists')"
+          Write-Host "  info_run_help: $(Get-Msg 'info_run_help')"
+          Write-Host "  warn_restart: $(Get-Msg 'warn_restart')"
+          Write-Host "  err_version_failed: $(Get-Msg 'err_version_failed')"
+
+      - name: Run actual install
+        if: github.event.inputs.version != '' || true
+        shell: pwsh
+        env:
+          SHNOTE_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          Write-Host "=== Running actual install ===" -ForegroundColor Cyan
+          & scripts/install.ps1
+
+          Write-Host ""
+          Write-Host "=== Verify installation ===" -ForegroundColor Cyan
+          $installPath = "$env:USERPROFILE\.local\bin\shnote.exe"
+          if (Test-Path $installPath) {
+            Write-Host "✓ Binary found at: $installPath"
+            Get-Item $installPath | Select-Object Name, Length, LastWriteTime
+          } else {
+            Write-Host "✗ Binary not found at: $installPath" -ForegroundColor Red
+          }
+
+          Write-Host ""
+          Write-Host "=== Verify PATH ===" -ForegroundColor Cyan
+          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+          if ($userPath -like "*\.local\bin*") {
+            Write-Host "✓ PATH configured correctly"
+          } else {
+            Write-Host "✗ PATH not configured" -ForegroundColor Red
+          }
+
+          Write-Host ""
+          Write-Host "=== Test shnote ===" -ForegroundColor Cyan
+          # Use full path since PATH update requires terminal restart
+          & $installPath --version
+          & $installPath --help | Select-Object -First 20
+
+      - name: Cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          # Remove installed binary
+          $installPath = "$env:USERPROFILE\.local\bin"
+          if (Test-Path $installPath) {
+            Remove-Item -Recurse -Force $installPath
+            Write-Host "Cleaned up $installPath"
+          }
+
+          # Remove from PATH
+          $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+          if ($userPath -like "*\.local\bin*") {
+            $newPath = ($userPath -split ';' | Where-Object { $_ -notlike "*\.local\bin*" }) -join ';'
+            [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+            Write-Host "Removed from PATH"
+          }
