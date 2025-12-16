@@ -25,6 +25,104 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
+# Language detection
+detect_lang() {
+    # Check environment variables in order
+    for var in SHNOTE_LANG LC_ALL LC_MESSAGES LANGUAGE LANG; do
+        eval "val=\$$var"
+        if [ -n "$val" ]; then
+            # For LANGUAGE, take only the first entry (before colon)
+            if [ "$var" = "LANGUAGE" ]; then
+                val=$(echo "$val" | cut -d: -f1)
+            fi
+            # Remove .UTF-8 suffix and convert to lowercase
+            val=$(echo "$val" | sed 's/\..*$//' | tr '[:upper:]' '[:lower:]')
+            # Skip C/POSIX
+            case "$val" in
+                c|posix) continue ;;
+            esac
+            # Check for zh or en
+            case "$val" in
+                zh*) echo "zh"; return ;;
+                en*) echo "en"; return ;;
+            esac
+        fi
+    done
+
+    # macOS: try AppleLocale
+    if [ "$(uname -s)" = "Darwin" ]; then
+        locale=$(defaults read -g AppleLocale 2>/dev/null || true)
+        if [ -n "$locale" ]; then
+            locale=$(echo "$locale" | tr '[:upper:]' '[:lower:]')
+            case "$locale" in
+                zh*) echo "zh"; return ;;
+                en*) echo "en"; return ;;
+            esac
+        fi
+    fi
+
+    # Default to English
+    echo "en"
+}
+
+LANG_CODE=$(detect_lang)
+
+# i18n messages
+msg() {
+    local key="$1"
+    shift
+    case "$LANG_CODE" in
+        zh)
+            case "$key" in
+                info_detected) printf "检测到：%s %s (%s)" "$1" "$2" "$3" ;;
+                info_proxy) printf "使用 GitHub 代理：%s" "$1" ;;
+                info_downloading) printf "正在下载 shnote %s (%s)..." "$1" "$2" ;;
+                info_verifying) printf "正在校验..." ;;
+                info_installing) printf "正在安装到 %s..." "$1" ;;
+                info_success) printf "shnote %s 安装成功！" "$1" ;;
+                info_path_exists) printf "安装目录已在 PATH 中" ;;
+                info_path_configured) printf "PATH 已在 %s 中配置" "$1" ;;
+                info_adding_path) printf "正在将 %s 添加到 %s 中的 PATH" "$1" "$2" ;;
+                info_path_done) printf "PATH 配置成功" ;;
+                info_run_help) printf "运行 'shnote --help' 开始使用" ;;
+                warn_no_shell_config) printf "无法检测 shell 配置文件" ;;
+                warn_restart) printf "请重启终端或运行：" ;;
+                err_unsupported_os) printf "不支持的操作系统：%s" "$1" ;;
+                err_unsupported_arch) printf "不支持的架构：%s" "$1" ;;
+                err_no_curl_wget) printf "未找到 curl 或 wget，请先安装" ;;
+                err_version_failed) printf "获取最新版本失败" ;;
+                err_download_failed) printf "下载失败" ;;
+                err_checksum_failed) printf "校验失败！\n预期：%s\n实际：%s" "$1" "$2" ;;
+                hint_add_path) printf "请手动将以下内容添加到 shell 配置文件：" ;;
+            esac
+            ;;
+        *)
+            case "$key" in
+                info_detected) printf "Detected: %s %s (%s)" "$1" "$2" "$3" ;;
+                info_proxy) printf "Using GitHub proxy: %s" "$1" ;;
+                info_downloading) printf "Downloading shnote %s for %s..." "$1" "$2" ;;
+                info_verifying) printf "Verifying checksum..." ;;
+                info_installing) printf "Installing to %s..." "$1" ;;
+                info_success) printf "shnote %s installed successfully!" "$1" ;;
+                info_path_exists) printf "Installation directory is already in PATH" ;;
+                info_path_configured) printf "PATH already configured in %s" "$1" ;;
+                info_adding_path) printf "Adding %s to PATH in %s" "$1" "$2" ;;
+                info_path_done) printf "PATH configured successfully" ;;
+                info_run_help) printf "Run 'shnote --help' to get started" ;;
+                warn_no_shell_config) printf "Could not detect shell config file" ;;
+                warn_restart) printf "Please restart your terminal or run:" ;;
+                err_unsupported_os) printf "Unsupported OS: %s" "$1" ;;
+                err_unsupported_arch) printf "Unsupported architecture: %s" "$1" ;;
+                err_no_curl_wget) printf "Neither curl nor wget found. Please install one of them." ;;
+                err_version_failed) printf "Failed to get latest version" ;;
+                err_download_failed) printf "Download failed" ;;
+                err_checksum_failed) printf "Checksum verification failed!\nExpected: %s\nActual:   %s" "$1" "$2" ;;
+                hint_add_path) printf "Please add the following to your shell profile manually:" ;;
+            esac
+            ;;
+    esac
+}
+
 info() {
     printf "${GREEN}[INFO]${NC} %s\n" "$1"
 }
@@ -55,7 +153,7 @@ detect_os() {
     case "$(uname -s)" in
         Linux*)  echo "linux" ;;
         Darwin*) echo "macos" ;;
-        *)       error "Unsupported OS: $(uname -s)" ;;
+        *)       error "$(msg err_unsupported_os "$(uname -s)")" ;;
     esac
 }
 
@@ -64,7 +162,7 @@ detect_arch() {
     case "$(uname -m)" in
         x86_64|amd64)   echo "x86_64" ;;
         arm64|aarch64)  echo "aarch64" ;;
-        *)              error "Unsupported architecture: $(uname -m)" ;;
+        *)              error "$(msg err_unsupported_arch "$(uname -m)")" ;;
     esac
 }
 
@@ -96,7 +194,7 @@ get_latest_version() {
             grep '"tag_name":' | \
             sed -E 's/.*"([^"]+)".*/\1/'
     else
-        error "Neither curl nor wget found. Please install one of them."
+        error "$(msg err_no_curl_wget)"
     fi
 }
 
@@ -110,7 +208,7 @@ download_file() {
     elif command -v wget >/dev/null 2>&1; then
         wget --show-progress -q -O "$output" "$url"
     else
-        error "Neither curl nor wget found."
+        error "$(msg err_no_curl_wget)"
     fi
 }
 
@@ -129,7 +227,7 @@ verify_checksum() {
     fi
 
     if [ "$actual" != "$expected" ]; then
-        error "Checksum verification failed!\nExpected: $expected\nActual:   $actual"
+        error "$(msg err_checksum_failed "$expected" "$actual")"
     fi
 }
 
@@ -149,37 +247,89 @@ download_and_install() {
     tmp_dir=$(mktemp -d)
     trap "rm -rf $tmp_dir" EXIT
 
-    info "Downloading shnote ${version} for ${target}..."
-    download_file "$url" "${tmp_dir}/shnote" || error "Failed to download binary"
-    download_file "$checksum_url" "${tmp_dir}/shnote.sha256" || error "Failed to download checksum"
+    info "$(msg info_downloading "$version" "$target")"
+    download_file "$url" "${tmp_dir}/shnote" || error "$(msg err_download_failed)"
+    download_file "$checksum_url" "${tmp_dir}/shnote.sha256" || error "$(msg err_download_failed)"
 
-    info "Verifying checksum..."
+    info "$(msg info_verifying)"
     expected_hash=$(awk '{print $1}' "${tmp_dir}/shnote.sha256")
     verify_checksum "${tmp_dir}/shnote" "$expected_hash"
 
-    info "Installing to ${INSTALL_DIR}..."
+    info "$(msg info_installing "$INSTALL_DIR")"
     mkdir -p "$INSTALL_DIR"
     chmod +x "${tmp_dir}/shnote"
     mv "${tmp_dir}/shnote" "${INSTALL_DIR}/shnote"
 
-    info "shnote ${version} installed successfully!"
+    info "$(msg info_success "$version")"
 }
 
-# Check if in PATH
-check_path() {
+# Check if in PATH and add if not
+setup_path() {
     case ":$PATH:" in
         *":$INSTALL_DIR:"*)
+            info "$(msg info_path_exists)"
             return 0
             ;;
-        *)
-            warn "Installation directory is not in PATH"
-            echo ""
-            echo "Add the following to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-            echo ""
-            echo "  export PATH=\"\$PATH:$INSTALL_DIR\""
-            echo ""
+    esac
+
+    # Detect shell and config file
+    local shell_name
+    local config_file=""
+
+    shell_name=$(basename "$SHELL")
+
+    case "$shell_name" in
+        bash)
+            if [ -f "$HOME/.bashrc" ]; then
+                config_file="$HOME/.bashrc"
+            elif [ -f "$HOME/.bash_profile" ]; then
+                config_file="$HOME/.bash_profile"
+            fi
+            ;;
+        zsh)
+            config_file="$HOME/.zshrc"
+            ;;
+        fish)
+            config_file="$HOME/.config/fish/config.fish"
             ;;
     esac
+
+    if [ -z "$config_file" ]; then
+        warn "$(msg warn_no_shell_config)"
+        echo ""
+        echo "$(msg hint_add_path)"
+        echo ""
+        echo "  export PATH=\"\$PATH:$INSTALL_DIR\""
+        echo ""
+        return 0
+    fi
+
+    # Check if already configured in the file
+    if [ -f "$config_file" ] && grep -q "$INSTALL_DIR" "$config_file" 2>/dev/null; then
+        info "$(msg info_path_configured "$config_file")"
+        return 0
+    fi
+
+    # Add to config file
+    info "$(msg info_adding_path "$INSTALL_DIR" "$config_file")"
+
+    if [ "$shell_name" = "fish" ]; then
+        mkdir -p "$(dirname "$config_file")"
+        echo "" >> "$config_file"
+        echo "# Added by shnote installer" >> "$config_file"
+        echo "fish_add_path $INSTALL_DIR" >> "$config_file"
+    else
+        echo "" >> "$config_file"
+        echo "# Added by shnote installer" >> "$config_file"
+        echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$config_file"
+    fi
+
+    info "$(msg info_path_done)"
+    echo ""
+    warn "$(msg warn_restart)"
+    echo ""
+    echo "  source $config_file"
+    echo ""
 }
 
 main() {
@@ -191,21 +341,21 @@ main() {
     arch=$(detect_arch)
     target=$(get_target "$os" "$arch")
 
-    info "Detected: ${os} ${arch} (${target})"
+    info "$(msg info_detected "$os" "$arch" "$target")"
 
     # Show proxy info if configured
     if [ -n "$GITHUB_PROXY" ]; then
-        info "Using GitHub proxy: ${GITHUB_PROXY}"
+        info "$(msg info_proxy "$GITHUB_PROXY")"
     fi
 
     local version="${SHNOTE_VERSION:-$(get_latest_version)}"
-    [ -z "$version" ] && error "Failed to get latest version"
+    [ -z "$version" ] && error "$(msg err_version_failed)"
 
     download_and_install "$version" "$target"
-    check_path
+    setup_path
 
     echo ""
-    info "Run 'shnote --help' to get started"
+    info "$(msg info_run_help)"
 }
 
 main "$@"
