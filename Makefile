@@ -1,7 +1,8 @@
 # shnote Makefile
 # 常用开发命令
 
-.PHONY: all build release check test test-verbose lint fmt clean install uninstall cov cov-html cov-open doc doc-open help
+.PHONY: all build build-release check test test-verbose lint fmt clean install uninstall cov cov-html cov-open doc doc-open help
+.PHONY: release-patch release-minor release-major release-dry
 
 # 默认目标
 all: check test
@@ -13,7 +14,7 @@ build:
 	cargo build
 
 # Release 构建
-release:
+build-release:
 	cargo build --release
 
 # 检查编译（不生成二进制）
@@ -109,6 +110,22 @@ clean-cov:
 
 # ============ 发布 ============
 
+# 预览发布（dry-run）
+release-dry:
+	cargo release patch
+
+# 发布 patch 版本 (0.1.5 → 0.1.6)
+release-patch:
+	cargo release patch --execute
+
+# 发布 minor 版本 (0.1.5 → 0.2.0)
+release-minor:
+	cargo release minor --execute
+
+# 发布 major 版本 (0.1.5 → 1.0.0)
+release-major:
+	cargo release major --execute
+
 # 检查发布准备情况
 publish-check:
 	cargo publish --dry-run
@@ -120,7 +137,7 @@ help:
 	@echo ""
 	@echo "构建："
 	@echo "  make build         - Debug 构建"
-	@echo "  make release       - Release 构建"
+	@echo "  make build-release - Release 构建"
 	@echo "  make check         - 检查编译"
 	@echo ""
 	@echo "测试："
@@ -144,6 +161,12 @@ help:
 	@echo "文档："
 	@echo "  make doc           - 生成文档"
 	@echo "  make doc-open      - 生成并打开文档"
+	@echo ""
+	@echo "发布："
+	@echo "  make release-dry   - 预览发布（dry-run）"
+	@echo "  make release-patch - 发布 patch 版本"
+	@echo "  make release-minor - 发布 minor 版本"
+	@echo "  make release-major - 发布 major 版本"
 	@echo ""
 	@echo "其他："
 	@echo "  make install       - 安装到系统"
