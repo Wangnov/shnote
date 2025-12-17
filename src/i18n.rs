@@ -243,6 +243,13 @@ impl I18n {
         }
     }
 
+    pub fn err_invalid_output_value(&self, value: &str, valid: &str) -> String {
+        match self.lang {
+            Lang::En => format!("invalid output value: {value}. Valid options: {valid}"),
+            Lang::Zh => format!("无效的输出模式：{value}。有效选项：{valid}"),
+        }
+    }
+
     #[allow(dead_code)]
     pub fn err_home_dir(&self) -> &'static str {
         match self.lang {

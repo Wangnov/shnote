@@ -49,8 +49,8 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     }
 
-    // Output WHAT/WHY for execution commands
-    if cli.command.requires_what_why() {
+    // Output WHAT/WHY for execution commands (if not in quiet mode)
+    if cli.command.requires_what_why() && config.should_print_header() {
         // Safe: `validate_what_why` above guarantees these are present for execution commands.
         let what = cli.what.as_deref().expect("validated --what");
         let why = cli.why.as_deref().expect("validated --why");

@@ -7,13 +7,27 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n::I18n;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     #[serde(default)]
     pub paths: PathsConfig,
 
     #[serde(default)]
     pub i18n: I18nConfig,
+
+    /// Output mode: default | quiet
+    #[serde(default = "Config::default_output")]
+    pub output: String,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            paths: PathsConfig::default(),
+            i18n: I18nConfig::default(),
+            output: Self::default_output(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -77,6 +91,15 @@ impl I18nConfig {
 }
 
 impl Config {
+    fn default_output() -> String {
+        "default".to_string()
+    }
+
+    /// Check if WHAT/WHY header should be printed
+    pub fn should_print_header(&self) -> bool {
+        self.output != "quiet"
+    }
+
     pub fn load() -> Result<Self> {
         let path = config_path()?;
         if !path.exists() {
@@ -105,6 +128,7 @@ impl Config {
             "node" => Some(self.paths.node.clone()),
             "shell" => Some(self.paths.shell.clone()),
             "language" => Some(self.i18n.language.clone()),
+            "output" => Some(self.output.clone()),
             _ => None,
         }
     }
@@ -138,6 +162,17 @@ impl Config {
                 self.i18n.language = value.to_string();
                 Ok(true)
             }
+            "output" => {
+                let valid = ["default", "quiet"];
+                if !valid.contains(&value) {
+                    anyhow::bail!(
+                        "{}",
+                        i18n.err_invalid_output_value(value, &valid.join(", "))
+                    );
+                }
+                self.output = value.to_string();
+                Ok(true)
+            }
             _ => Ok(false),
         }
     }
@@ -148,6 +183,7 @@ impl Config {
             ("node".to_string(), self.paths.node.clone()),
             ("shell".to_string(), self.paths.shell.clone()),
             ("language".to_string(), self.i18n.language.clone()),
+            ("output".to_string(), self.output.clone()),
         ]
     }
 
@@ -218,6 +254,7 @@ mod tests {
         assert_eq!(config.paths.node, "node");
         assert_eq!(config.paths.shell, "auto");
         assert_eq!(config.i18n.language, "auto");
+        assert_eq!(config.output, "default");
     }
 
     #[test]
@@ -228,12 +265,16 @@ mod tests {
         assert_eq!(config.get("python"), Some("python3".to_string()));
         assert_eq!(config.get("shell"), Some("auto".to_string()));
         assert_eq!(config.get("language"), Some("auto".to_string()));
+        assert_eq!(config.get("output"), Some("default".to_string()));
 
         config.set(&i18n, "python", "/usr/bin/python3").unwrap();
         assert_eq!(config.get("python"), Some("/usr/bin/python3".to_string()));
 
         config.set(&i18n, "node", "/usr/bin/node").unwrap();
         assert_eq!(config.get("node"), Some("/usr/bin/node".to_string()));
+
+        config.set(&i18n, "output", "quiet").unwrap();
+        assert_eq!(config.get("output"), Some("quiet".to_string()));
 
         assert!(config.get("nonexistent").is_none());
         assert!(!config.set(&i18n, "nonexistent", "value").unwrap());
@@ -258,6 +299,29 @@ mod tests {
     }
 
     #[test]
+    fn config_set_validates_output() {
+        let i18n = test_i18n();
+        let mut config = Config::default();
+
+        assert!(config.set(&i18n, "output", "default").is_ok());
+        assert!(config.set(&i18n, "output", "quiet").is_ok());
+        assert!(config.set(&i18n, "output", "invalid").is_err());
+    }
+
+    #[test]
+    fn should_print_header_default_is_true() {
+        let config = Config::default();
+        assert!(config.should_print_header());
+    }
+
+    #[test]
+    fn should_print_header_quiet_is_false() {
+        let mut config = Config::default();
+        config.output = "quiet".to_string();
+        assert!(!config.should_print_header());
+    }
+
+    #[test]
     fn config_serialization() {
         let config = Config::default();
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -269,9 +333,10 @@ mod tests {
     fn config_list() {
         let config = Config::default();
         let list = config.list();
-        assert_eq!(list.len(), 4);
+        assert_eq!(list.len(), 5);
         assert!(list.contains(&("python".to_string(), "python3".to_string())));
         assert!(list.contains(&("node".to_string(), "node".to_string())));
+        assert!(list.contains(&("output".to_string(), "default".to_string())));
     }
 
     #[test]

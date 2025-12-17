@@ -262,6 +262,7 @@ shnote config path
 | node | Node.js 解释器路径 | node |
 | shell | Shell 类型 (auto/sh/bash/zsh/pwsh/cmd) | auto |
 | language | 语言 (auto/zh/en) | auto |
+| output | 输出模式 (default/quiet) | default |
 
 ### 其他命令
 
@@ -556,6 +557,7 @@ shnote config path
 | node | Node.js interpreter path | node |
 | shell | Shell type (auto/sh/bash/zsh/pwsh/cmd) | auto |
 | language | Language (auto/zh/en) | auto |
+| output | Output mode (default/quiet) | default |
 
 ### Other Commands
 
