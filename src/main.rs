@@ -8,10 +8,10 @@ mod init;
 mod localize;
 mod pueue_embed;
 mod shell;
-mod uninstall;
-mod update;
 #[cfg(test)]
 mod test_support;
+mod uninstall;
+mod update;
 
 use std::io::{self, Write};
 use std::process::ExitCode;

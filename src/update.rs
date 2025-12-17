@@ -56,10 +56,7 @@ pub fn run_update(i18n: &I18n, args: UpdateArgs) -> Result<()> {
     download_and_install(i18n, latest_version, &install_path)?;
 
     println!();
-    println!(
-        "{}",
-        i18n.update_success(&format!("v{}", latest_version))
-    );
+    println!("{}", i18n.update_success(&format!("v{}", latest_version)));
 
     Ok(())
 }

@@ -99,9 +99,14 @@ impl Command {
             Self::Pip(_) => Some("pip"),
             Self::Npm(_) => Some("npm"),
             Self::Npx(_) => Some("npx"),
-            Self::Config(_) | Self::Init(_) | Self::Setup | Self::Doctor | Self::Completions(_) | Self::Info | Self::Update(_) | Self::Uninstall(_) => {
-                None
-            }
+            Self::Config(_)
+            | Self::Init(_)
+            | Self::Setup
+            | Self::Doctor
+            | Self::Completions(_)
+            | Self::Info
+            | Self::Update(_)
+            | Self::Uninstall(_) => None,
         }
     }
 

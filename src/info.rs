@@ -2,9 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
-use crate::config::{
-    home_dir, pueue_binary_name, pueued_binary_name, shnote_bin_dir, shnote_home,
-};
+use crate::config::{home_dir, pueue_binary_name, pueued_binary_name, shnote_bin_dir, shnote_home};
 use crate::i18n::I18n;
 use crate::pueue_embed::{embedded, PUEUE_VERSION};
 
@@ -61,29 +59,23 @@ pub fn run_info(i18n: &I18n) -> Result<()> {
     let pueue_path = bin_dir.as_ref().map(|d| d.join(pueue_binary_name()));
     let pueued_path = bin_dir.as_ref().map(|d| d.join(pueued_binary_name()));
 
-    let pueue_installed = pueue_path
-        .as_ref()
-        .map(|p| p.exists())
-        .unwrap_or(false);
-    let pueued_installed = pueued_path
-        .as_ref()
-        .map(|p| p.exists())
-        .unwrap_or(false);
+    let pueue_installed = pueue_path.as_ref().map(|p| p.exists()).unwrap_or(false);
+    let pueued_installed = pueued_path.as_ref().map(|p| p.exists()).unwrap_or(false);
 
     if pueue_installed && pueued_installed {
-        println!(
-            "  pueue   v{}  {}",
-            PUEUE_VERSION,
-            i18n.info_installed()
-        );
-        println!(
-            "  pueued  v{}  {}",
-            PUEUE_VERSION,
-            i18n.info_installed()
-        );
+        println!("  pueue   v{}  {}", PUEUE_VERSION, i18n.info_installed());
+        println!("  pueued  v{}  {}", PUEUE_VERSION, i18n.info_installed());
     } else {
-        println!("  pueue   {}  {}", i18n.info_not_installed(), i18n.info_run_setup());
-        println!("  pueued  {}  {}", i18n.info_not_installed(), i18n.info_run_setup());
+        println!(
+            "  pueue   {}  {}",
+            i18n.info_not_installed(),
+            i18n.info_run_setup()
+        );
+        println!(
+            "  pueued  {}  {}",
+            i18n.info_not_installed(),
+            i18n.info_run_setup()
+        );
     }
 
     Ok(())
