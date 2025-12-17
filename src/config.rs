@@ -316,8 +316,10 @@ mod tests {
 
     #[test]
     fn should_print_header_quiet_is_false() {
-        let mut config = Config::default();
-        config.output = "quiet".to_string();
+        let config = Config {
+            output: "quiet".to_string(),
+            ..Default::default()
+        };
         assert!(!config.should_print_header());
     }
 
