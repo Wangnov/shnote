@@ -267,6 +267,24 @@ shnote config path
 ### 其他命令
 
 ```bash
+# 查看安装信息（版本、路径、组件状态）
+shnote info
+
+# 更新到最新版本
+shnote update
+
+# 国内用户可使用代理加速
+GITHUB_PROXY=https://ghfast.top shnote update
+
+# 仅检查更新，不安装
+shnote update --check
+
+# 卸载 shnote（交互式确认）
+shnote uninstall
+
+# 卸载 shnote（跳过确认）
+shnote uninstall --yes
+
 # 检查环境依赖
 shnote doctor
 
@@ -562,6 +580,21 @@ shnote config path
 ### Other Commands
 
 ```bash
+# View installation info (version, paths, component status)
+shnote info
+
+# Update to the latest version
+shnote update
+
+# Only check for updates, don't install
+shnote update --check
+
+# Uninstall shnote (interactive confirmation)
+shnote uninstall
+
+# Uninstall shnote (skip confirmation)
+shnote uninstall --yes
+
 # Check environment dependencies
 shnote doctor
 
