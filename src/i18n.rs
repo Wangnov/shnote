@@ -691,6 +691,317 @@ impl I18n {
             Lang::Zh => "要生成补全脚本的 shell",
         }
     }
+
+    // === Info command messages ===
+
+    pub fn info_paths(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Paths",
+            Lang::Zh => "路径",
+        }
+    }
+
+    pub fn info_install_path(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Install",
+            Lang::Zh => "安装位置",
+        }
+    }
+
+    pub fn info_config_path(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Config",
+            Lang::Zh => "配置文件",
+        }
+    }
+
+    pub fn info_data_path(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Data",
+            Lang::Zh => "数据目录",
+        }
+    }
+
+    pub fn info_components(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Components",
+            Lang::Zh => "组件",
+        }
+    }
+
+    pub fn info_installed(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "✓ installed",
+            Lang::Zh => "✓ 已安装",
+        }
+    }
+
+    pub fn info_not_installed(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "✗ not installed",
+            Lang::Zh => "✗ 未安装",
+        }
+    }
+
+    pub fn info_run_setup(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "(run `shnote setup`)",
+            Lang::Zh => "（运行 `shnote setup`）",
+        }
+    }
+
+    pub fn info_unknown(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "unknown",
+            Lang::Zh => "未知",
+        }
+    }
+
+    // === Update command messages ===
+
+    pub fn update_checking(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Checking for updates...",
+            Lang::Zh => "正在检查更新...",
+        }
+    }
+
+    pub fn update_current_version(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Current version",
+            Lang::Zh => "当前版本",
+        }
+    }
+
+    pub fn update_latest_version(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Latest version",
+            Lang::Zh => "最新版本",
+        }
+    }
+
+    pub fn update_already_latest(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Already up to date!",
+            Lang::Zh => "已是最新版本！",
+        }
+    }
+
+    pub fn update_available(&self, version: &str) -> String {
+        match self.lang {
+            Lang::En => format!("Update available: {}", version),
+            Lang::Zh => format!("可用更新：{}", version),
+        }
+    }
+
+    pub fn update_downloading(&self, version: &str) -> String {
+        match self.lang {
+            Lang::En => format!("Downloading {}...", version),
+            Lang::Zh => format!("正在下载 {}...", version),
+        }
+    }
+
+    pub fn update_using_proxy(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Using proxy",
+            Lang::Zh => "使用代理",
+        }
+    }
+
+    pub fn update_verifying(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Verifying checksum...",
+            Lang::Zh => "正在校验...",
+        }
+    }
+
+    pub fn update_installing(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Installing...",
+            Lang::Zh => "正在安装...",
+        }
+    }
+
+    pub fn update_success(&self, version: &str) -> String {
+        match self.lang {
+            Lang::En => format!("Successfully updated to {}!", version),
+            Lang::Zh => format!("成功更新到 {}！", version),
+        }
+    }
+
+    pub fn update_err_install_path(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to determine install path",
+            Lang::Zh => "无法确定安装路径",
+        }
+    }
+
+    pub fn update_err_temp_dir(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to create temp directory",
+            Lang::Zh => "创建临时目录失败",
+        }
+    }
+
+    pub fn update_err_read_version(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to read version file",
+            Lang::Zh => "读取版本文件失败",
+        }
+    }
+
+    pub fn update_err_replace_binary(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to replace binary",
+            Lang::Zh => "替换二进制文件失败",
+        }
+    }
+
+    #[cfg_attr(unix, allow(dead_code))]
+    pub fn update_err_rename_old(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to rename old binary",
+            Lang::Zh => "重命名旧二进制文件失败",
+        }
+    }
+
+    // === Uninstall command messages ===
+
+    pub fn uninstall_will_remove(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "The following will be removed:",
+            Lang::Zh => "以下内容将被删除：",
+        }
+    }
+
+    pub fn uninstall_config_data(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "config and data",
+            Lang::Zh => "配置和数据",
+        }
+    }
+
+    pub fn uninstall_manual_removal(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "The following require manual removal:",
+            Lang::Zh => "以下内容需要手动删除：",
+        }
+    }
+
+    pub fn uninstall_path_entry(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "PATH entry in your shell config",
+            Lang::Zh => "shell 配置中的 PATH 条目",
+        }
+    }
+
+    pub fn uninstall_ai_rules(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "AI rules files",
+            Lang::Zh => "AI 规则文件",
+        }
+    }
+
+    pub fn uninstall_confirm(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Continue?",
+            Lang::Zh => "继续？",
+        }
+    }
+
+    pub fn uninstall_cancelled(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Uninstall cancelled.",
+            Lang::Zh => "已取消卸载。",
+        }
+    }
+
+    pub fn uninstall_removing(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Removing",
+            Lang::Zh => "正在删除",
+        }
+    }
+
+    pub fn uninstall_success(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "shnote has been uninstalled.",
+            Lang::Zh => "shnote 已卸载。",
+        }
+    }
+
+    pub fn uninstall_manual_steps(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Please complete the manual removal steps above.",
+            Lang::Zh => "请完成上述手动删除步骤。",
+        }
+    }
+
+    #[cfg_attr(unix, allow(dead_code))]
+    pub fn uninstall_windows_note(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Note: The binary will be removed after restart",
+            Lang::Zh => "注意：二进制文件将在重启后删除",
+        }
+    }
+
+    pub fn uninstall_err_remove_data(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to remove data directory",
+            Lang::Zh => "删除数据目录失败",
+        }
+    }
+
+    pub fn uninstall_err_remove_binary(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to remove binary",
+            Lang::Zh => "删除二进制文件失败",
+        }
+    }
+
+    // === Help text for new commands ===
+
+    pub fn help_cmd_info(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Show installation information",
+            Lang::Zh => "显示安装信息",
+        }
+    }
+
+    pub fn help_cmd_update(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Update shnote to the latest version",
+            Lang::Zh => "更新 shnote 到最新版本",
+        }
+    }
+
+    pub fn help_cmd_uninstall(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Uninstall shnote",
+            Lang::Zh => "卸载 shnote",
+        }
+    }
+
+    pub fn help_arg_update_check(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Only check for updates, don't install",
+            Lang::Zh => "仅检查更新，不安装",
+        }
+    }
+
+    pub fn help_arg_update_force(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Force update even if already up to date",
+            Lang::Zh => "即使已是最新版本也强制更新",
+        }
+    }
+
+    pub fn help_arg_uninstall_yes(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Skip confirmation prompt",
+            Lang::Zh => "跳过确认提示",
+        }
+    }
 }
 
 pub fn detect_lang(cli_lang: Option<&str>, config_lang: &str) -> Lang {

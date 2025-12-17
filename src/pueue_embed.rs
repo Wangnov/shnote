@@ -76,7 +76,7 @@ pub(crate) mod checksums {
 /// For development/testing, you can also use the setup command to download binaries
 /// from the internet instead.
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
-mod embedded {
+pub(crate) mod embedded {
     // pub const PUEUE: &[u8] = include_bytes!("../assets/pueue-aarch64-apple-darwin");
     // pub const PUEUED: &[u8] = include_bytes!("../assets/pueued-aarch64-apple-darwin");
     pub const PUEUE: Option<&[u8]> = None;
@@ -85,28 +85,28 @@ mod embedded {
 }
 
 #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-mod embedded {
+pub(crate) mod embedded {
     pub const PUEUE: Option<&[u8]> = None;
     pub const PUEUED: Option<&[u8]> = None;
     pub const PLATFORM: &str = "x86_64-apple-darwin";
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-mod embedded {
+pub(crate) mod embedded {
     pub const PUEUE: Option<&[u8]> = None;
     pub const PUEUED: Option<&[u8]> = None;
     pub const PLATFORM: &str = "x86_64-unknown-linux-musl";
 }
 
 #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
-mod embedded {
+pub(crate) mod embedded {
     pub const PUEUE: Option<&[u8]> = None;
     pub const PUEUED: Option<&[u8]> = None;
     pub const PLATFORM: &str = "aarch64-unknown-linux-musl";
 }
 
 #[cfg(all(target_os = "windows", target_arch = "x86_64"))]
-mod embedded {
+pub(crate) mod embedded {
     pub const PUEUE: Option<&[u8]> = None;
     pub const PUEUED: Option<&[u8]> = None;
     pub const PLATFORM: &str = "x86_64-pc-windows-msvc";
@@ -119,7 +119,7 @@ mod embedded {
     all(target_os = "linux", target_arch = "aarch64"),
     all(target_os = "windows", target_arch = "x86_64"),
 )))]
-mod embedded {
+pub(crate) mod embedded {
     pub const PUEUE: Option<&[u8]> = None;
     pub const PUEUED: Option<&[u8]> = None;
     pub const PLATFORM: &str = "unsupported";

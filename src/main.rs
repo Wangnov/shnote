@@ -3,10 +3,13 @@ mod config;
 mod doctor;
 mod executor;
 mod i18n;
+mod info;
 mod init;
 mod localize;
 mod pueue_embed;
 mod shell;
+mod uninstall;
+mod update;
 #[cfg(test)]
 mod test_support;
 
@@ -112,6 +115,21 @@ fn run(i18n: &I18n, config: &Config, command: Command) -> Result<ExitCode> {
 
         Command::Completions(args) => {
             generate_completions(args.shell);
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Command::Info => {
+            info::run_info(i18n)?;
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Command::Update(args) => {
+            update::run_update(i18n, args)?;
+            Ok(ExitCode::SUCCESS)
+        }
+
+        Command::Uninstall(args) => {
+            uninstall::run_uninstall(i18n, args)?;
             Ok(ExitCode::SUCCESS)
         }
     }

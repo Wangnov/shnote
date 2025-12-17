@@ -48,6 +48,9 @@ fn get_command_about(name: &str, i18n: &I18n) -> &'static str {
         "setup" => i18n.help_cmd_setup(),
         "doctor" => i18n.help_cmd_doctor(),
         "completions" => i18n.help_cmd_completions(),
+        "info" => i18n.help_cmd_info(),
+        "update" => i18n.help_cmd_update(),
+        "uninstall" => i18n.help_cmd_uninstall(),
         // Config subcommands
         "get" => i18n.help_cmd_config_get(),
         "set" => i18n.help_cmd_config_set(),
@@ -75,6 +78,10 @@ fn localize_args(cmd: Command, cmd_name: &str, i18n: &I18n) -> Command {
             .mut_arg("stdin", |arg| arg.help(i18n.help_arg_stdin()))
             .mut_arg("args", |arg| arg.help(i18n.help_arg_script_args())),
         "pip" | "npm" | "npx" => cmd.mut_arg("args", |arg| arg.help(i18n.help_arg_passthrough())),
+        "update" => cmd
+            .mut_arg("check", |arg| arg.help(i18n.help_arg_update_check()))
+            .mut_arg("force", |arg| arg.help(i18n.help_arg_update_force())),
+        "uninstall" => cmd.mut_arg("yes", |arg| arg.help(i18n.help_arg_uninstall_yes())),
         "get" => cmd.mut_arg("key", |arg| arg.help(i18n.help_arg_config_key())),
         "set" => cmd
             .mut_arg("key", |arg| arg.help(i18n.help_arg_config_key_short()))

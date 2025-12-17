@@ -126,6 +126,9 @@ jobs:
           cat *.sha256 > checksums.txt
           cat checksums.txt
 
+      - name: Create VERSION file
+        run: echo "${GITHUB_REF_NAME}" > release/VERSION
+
       - name: Copy install scripts
         run: |
           cp scripts/install.sh release/

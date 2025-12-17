@@ -209,7 +209,9 @@ fn test_i18n_defaults_failure_status_falls_back_to_english() {
 
 #[test]
 fn test_run_with_what_why() {
+    let temp_dir = TempDir::new().unwrap();
     shnote_cmd()
+        .env("HOME", temp_dir.path())
         .args(["--what", "测试", "--why", "验证", "run", "echo", "hello"])
         .assert()
         .success()
@@ -262,7 +264,9 @@ fn test_py_requires_source() {
 
 #[test]
 fn test_py_inline_code() {
+    let temp_dir = TempDir::new().unwrap();
     shnote_cmd()
+        .env("HOME", temp_dir.path())
         .args([
             "--what",
             "测试Python",
@@ -369,7 +373,9 @@ fn test_pip_requires_what_why() {
 
 #[test]
 fn test_pip_with_what_why() {
+    let temp_dir = TempDir::new().unwrap();
     shnote_cmd()
+        .env("HOME", temp_dir.path())
         .args(["--what", "test", "--why", "test", "pip", "--version"])
         .assert()
         .success()
@@ -389,7 +395,9 @@ fn test_npm_requires_what_why() {
 
 #[test]
 fn test_npm_with_what_why() {
+    let temp_dir = TempDir::new().unwrap();
     shnote_cmd()
+        .env("HOME", temp_dir.path())
         .args(["--what", "test", "--why", "test", "npm", "--version"])
         .assert()
         .success()
@@ -408,7 +416,9 @@ fn test_npx_requires_what_why() {
 
 #[test]
 fn test_npx_with_what_why() {
+    let temp_dir = TempDir::new().unwrap();
     shnote_cmd()
+        .env("HOME", temp_dir.path())
         .args(["--what", "test", "--why", "test", "npx", "--version"])
         .assert()
         .success()

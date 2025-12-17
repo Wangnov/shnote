@@ -61,6 +61,33 @@ pub enum Command {
 
     /// Generate shell completion scripts
     Completions(CompletionsArgs),
+
+    /// Show installation information
+    Info,
+
+    /// Update shnote to the latest version
+    Update(UpdateArgs),
+
+    /// Uninstall shnote
+    Uninstall(UninstallArgs),
+}
+
+#[derive(Args, Debug)]
+pub struct UpdateArgs {
+    /// Only check for updates, don't install
+    #[arg(long)]
+    pub check: bool,
+
+    /// Force update even if already up to date
+    #[arg(long)]
+    pub force: bool,
+}
+
+#[derive(Args, Debug)]
+pub struct UninstallArgs {
+    /// Skip confirmation prompt
+    #[arg(long, short = 'y')]
+    pub yes: bool,
 }
 
 impl Command {
@@ -72,7 +99,7 @@ impl Command {
             Self::Pip(_) => Some("pip"),
             Self::Npm(_) => Some("npm"),
             Self::Npx(_) => Some("npx"),
-            Self::Config(_) | Self::Init(_) | Self::Setup | Self::Doctor | Self::Completions(_) => {
+            Self::Config(_) | Self::Init(_) | Self::Setup | Self::Doctor | Self::Completions(_) | Self::Info | Self::Update(_) | Self::Uninstall(_) => {
                 None
             }
         }
