@@ -108,6 +108,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -134,12 +136,32 @@ jobs:
           cp scripts/install.sh release/
           cp scripts/install.ps1 release/
 
+      - name: Generate release notes
+        run: |
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -n 1 || true)
+          {
+            echo "## 更新说明"
+            echo ""
+            if [ -n "$PREV_TAG" ]; then
+              echo "范围: ${PREV_TAG}..${CURRENT_TAG}"
+              echo ""
+              git log --pretty="- %s (%h)" "${PREV_TAG}..${CURRENT_TAG}"
+              echo ""
+              echo "比较: https://github.com/${GITHUB_REPOSITORY}/compare/${PREV_TAG}...${CURRENT_TAG}"
+            else
+              echo "范围: 历史全部提交"
+              echo ""
+              git log --pretty="- %s (%h)"
+            fi
+          } > release/RELEASE_NOTES.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           draft: false
           prerelease: ${{ contains(github.ref, '-') }}
-          generate_release_notes: true
+          body_path: release/RELEASE_NOTES.md
           files: |
             release/*
         env:
