@@ -651,13 +651,24 @@ mod tests {
 
     #[test]
     fn shnote_home_path_structure() {
+        use tempfile::TempDir;
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
         let shnote_home = shnote_home().unwrap();
         assert!(shnote_home.ends_with(".shnote"));
     }
 
     #[test]
     fn home_dir_returns_path() {
+        use tempfile::TempDir;
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
         let home = home_dir().unwrap();
+        assert_eq!(home, PathBuf::from(temp_dir.path()));
         assert!(home.is_absolute());
     }
 
