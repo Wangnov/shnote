@@ -7,13 +7,9 @@ license = "MIT"
 repository = "https://github.com/wangnov/shnote"
 readme = "README.md"
 keywords = [
-  "nodejs",
-  "python",
   "rust",
   "terminal",
   "codex",
-  "uv",
-  "pueue",
   "gemini-cli",
   "claude-code",
 ]
