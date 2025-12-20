@@ -57,8 +57,25 @@ fn main() -> ExitCode {
         // Safe: `validate_what_why` above guarantees these are present for execution commands.
         let what = cli.what.as_deref().expect("validated --what");
         let why = cli.why.as_deref().expect("validated --why");
-        println!("WHAT: {what}");
-        println!("WHY:  {why}");
+        let use_color = config.should_color_header();
+        let what_label = if use_color {
+            match config.what_color_escape() {
+                Some(code) => format!("\x1b[{code}mWHAT\x1b[0m"),
+                None => "WHAT".to_string(),
+            }
+        } else {
+            "WHAT".to_string()
+        };
+        let why_label = if use_color {
+            match config.why_color_escape() {
+                Some(code) => format!("\x1b[{code}mWHY\x1b[0m"),
+                None => "WHY".to_string(),
+            }
+        } else {
+            "WHY".to_string()
+        };
+        println!("{what_label}: {what}");
+        println!("{why_label}:  {why}");
         // Flush stdout to ensure WHAT/WHY appears before command output
         let _ = io::stdout().flush();
     }

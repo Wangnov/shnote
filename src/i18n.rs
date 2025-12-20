@@ -250,6 +250,20 @@ impl I18n {
         }
     }
 
+    pub fn err_invalid_color_value(&self, value: &str, valid: &str) -> String {
+        match self.lang {
+            Lang::En => format!("invalid color value: {value}. Valid options: {valid}"),
+            Lang::Zh => format!("无效的颜色开关：{value}。有效选项：{valid}"),
+        }
+    }
+
+    pub fn err_invalid_color_name(&self, value: &str, valid: &str) -> String {
+        match self.lang {
+            Lang::En => format!("invalid color name: {value}. Valid options: {valid}"),
+            Lang::Zh => format!("无效的颜色名称：{value}。有效选项：{valid}"),
+        }
+    }
+
     #[allow(dead_code)]
     pub fn err_home_dir(&self) -> &'static str {
         match self.lang {
@@ -665,8 +679,10 @@ impl I18n {
     // Config args
     pub fn help_arg_config_key(&self) -> &'static str {
         match self.lang {
-            Lang::En => "Configuration key (e.g., python, node, shell, language)",
-            Lang::Zh => "配置键（如 python、node、shell、language）",
+            Lang::En => {
+                "Configuration key (e.g., python, node, shell, language, output, color, what_color, why_color)"
+            }
+            Lang::Zh => "配置键（如 python、node、shell、language、output、color、what_color、why_color）",
         }
     }
 
@@ -1362,6 +1378,20 @@ mod tests {
 
         assert!(en.err_write_config("/tmp/c").contains("/tmp/c"));
         assert!(zh.err_write_config("/tmp/c").contains("/tmp/c"));
+
+        assert!(en
+            .err_invalid_color_value("maybe", "true, false")
+            .contains("maybe"));
+        assert!(zh
+            .err_invalid_color_value("maybe", "true, false")
+            .contains("maybe"));
+
+        assert!(en
+            .err_invalid_color_name("orange", "red, green, blue")
+            .contains("orange"));
+        assert!(zh
+            .err_invalid_color_name("orange", "red, green, blue")
+            .contains("orange"));
     }
 
     #[test]

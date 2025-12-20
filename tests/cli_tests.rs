@@ -8,6 +8,12 @@ fn shnote_cmd() -> Command {
     cargo_bin_cmd!("shnote")
 }
 
+fn write_color_disabled_config(temp_dir: &TempDir) {
+    let shnote_dir = temp_dir.path().join(".shnote");
+    fs::create_dir_all(&shnote_dir).unwrap();
+    fs::write(shnote_dir.join("config.toml"), "color = false\n").unwrap();
+}
+
 // === Help and version ===
 #[test]
 fn test_help() {
@@ -210,6 +216,7 @@ fn test_i18n_defaults_failure_status_falls_back_to_english() {
 #[test]
 fn test_run_with_what_why() {
     let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_config(&temp_dir);
     shnote_cmd()
         .env("HOME", temp_dir.path())
         .args(["--what", "测试", "--why", "验证", "run", "echo", "hello"])
@@ -265,6 +272,7 @@ fn test_py_requires_source() {
 #[test]
 fn test_py_inline_code() {
     let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_config(&temp_dir);
     shnote_cmd()
         .env("HOME", temp_dir.path())
         .args([
@@ -374,6 +382,7 @@ fn test_pip_requires_what_why() {
 #[test]
 fn test_pip_with_what_why() {
     let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_config(&temp_dir);
     shnote_cmd()
         .env("HOME", temp_dir.path())
         .args(["--what", "test", "--why", "test", "pip", "--version"])
@@ -396,6 +405,7 @@ fn test_npm_requires_what_why() {
 #[test]
 fn test_npm_with_what_why() {
     let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_config(&temp_dir);
     shnote_cmd()
         .env("HOME", temp_dir.path())
         .args(["--what", "test", "--why", "test", "npm", "--version"])
@@ -417,6 +427,7 @@ fn test_npx_requires_what_why() {
 #[test]
 fn test_npx_with_what_why() {
     let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_config(&temp_dir);
     shnote_cmd()
         .env("HOME", temp_dir.path())
         .args(["--what", "test", "--why", "test", "npx", "--version"])
@@ -433,7 +444,10 @@ fn test_config_list() {
         .assert()
         .success()
         .stdout(predicate::str::contains("python"))
-        .stdout(predicate::str::contains("node"));
+        .stdout(predicate::str::contains("node"))
+        .stdout(predicate::str::contains("color"))
+        .stdout(predicate::str::contains("what_color"))
+        .stdout(predicate::str::contains("why_color"));
 }
 
 #[cfg(unix)]
@@ -575,6 +589,66 @@ fn test_config_set_language() {
         .assert()
         .success()
         .stdout(predicate::str::contains("zh"));
+}
+
+#[test]
+fn test_config_set_color() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::create_dir_all(temp_dir.path().join(".shnote")).unwrap();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "set", "color", "false"])
+        .assert()
+        .success();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "get", "color"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("false"));
+}
+
+#[test]
+fn test_config_set_what_why_color() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::create_dir_all(temp_dir.path().join(".shnote")).unwrap();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "set", "what_color", "yellow"])
+        .assert()
+        .success();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "set", "why_color", "blue"])
+        .assert()
+        .success();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "get", "what_color"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("yellow"));
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "get", "why_color"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("blue"));
+}
+
+#[test]
+fn test_config_set_invalid_label_color() {
+    shnote_cmd()
+        .args(["config", "set", "what_color", "invalid"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid"));
 }
 
 #[test]

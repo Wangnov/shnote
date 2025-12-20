@@ -187,7 +187,7 @@ pub struct ConfigArgs {
 pub enum ConfigAction {
     /// Get a configuration value
     Get {
-        /// Configuration key (e.g., python, node, shell, language)
+        /// Configuration key (e.g., python, node, shell, language, output, color, what_color, why_color)
         key: String,
     },
 

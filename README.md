@@ -246,6 +246,9 @@ shnote config get python
 shnote config set python /usr/bin/python3
 shnote config set shell bash
 shnote config set language zh
+shnote config set color false
+shnote config set what_color cyan
+shnote config set why_color magenta
 
 # 重置配置
 shnote config reset
@@ -263,6 +266,9 @@ shnote config path
 | shell | Shell 类型 (auto/sh/bash/zsh/pwsh/cmd) | auto |
 | language | 语言 (auto/zh/en) | auto |
 | output | 输出模式 (default/quiet) | default |
+| color | WHAT/WHY 颜色开关 (true/false) | true |
+| what_color | WHAT 颜色 (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | cyan |
+| why_color | WHY 颜色 (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | magenta |
 
 ### 其他命令
 
@@ -559,6 +565,9 @@ shnote config get python
 shnote config set python /usr/bin/python3
 shnote config set shell bash
 shnote config set language en
+shnote config set color false
+shnote config set what_color cyan
+shnote config set why_color magenta
 
 # Reset config
 shnote config reset
@@ -576,6 +585,9 @@ shnote config path
 | shell | Shell type (auto/sh/bash/zsh/pwsh/cmd) | auto |
 | language | Language (auto/zh/en) | auto |
 | output | Output mode (default/quiet) | default |
+| color | Colorize WHAT/WHY header (true/false) | true |
+| what_color | WHAT color (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | cyan |
+| why_color | WHY color (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | magenta |
 
 ### Other Commands
 
