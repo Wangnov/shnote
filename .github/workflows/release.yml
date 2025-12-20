@@ -111,6 +111,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -155,6 +158,12 @@ jobs:
               git log --pretty="- %s (%h)"
             fi
           } > release/RELEASE_NOTES.md
+
+      - name: Publish to crates.io
+        if: ${{ !contains(github.ref, '-') && secrets.CARGO_REGISTRY_TOKEN != '' }}
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: cargo publish
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
