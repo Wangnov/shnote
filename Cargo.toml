@@ -1,10 +1,23 @@
 [package]
 name = "shnote"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 description = "A lightweight command wrapper that enforces WHAT/WHY documentation"
 license = "MIT"
 repository = "https://github.com/wangnov/shnote"
+readme = "README.md"
+keywords = [
+  "nodejs",
+  "python",
+  "rust",
+  "terminal",
+  "codex",
+  "uv",
+  "pueue",
+  "gemini-cli",
+  "claude-code",
+]
+categories = ["command-line-utilities"]
 
 [dependencies]
 anyhow = "1.0"
