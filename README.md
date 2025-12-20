@@ -63,6 +63,13 @@ macOS / Linux:
 curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
 ```
 
+Homebrew (macOS):
+
+```bash
+brew tap wangnov/tap
+brew install shnote
+```
+
 Windows (PowerShell):
 
 ```powershell
@@ -93,6 +100,15 @@ $env:GITHUB_PROXY = "https://ghfast.top"; irm https://ghfast.top/https://raw.git
 
 ```bash
 cargo install --path .
+```
+
+</details>
+
+<details>
+<summary>通过 Cargo 安装（crates.io）</summary>
+
+```bash
+cargo install shnote
 ```
 
 </details>
@@ -404,6 +420,13 @@ macOS / Linux:
 curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
 ```
 
+Homebrew (macOS):
+
+```bash
+brew tap wangnov/tap
+brew install shnote
+```
+
 Windows (PowerShell):
 
 ```powershell
@@ -415,6 +438,15 @@ irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | 
 
 ```bash
 cargo install --path .
+```
+
+</details>
+
+<details>
+<summary>Install via Cargo (crates.io)</summary>
+
+```bash
+cargo install shnote
 ```
 
 </details>
