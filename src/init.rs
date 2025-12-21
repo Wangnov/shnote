@@ -9,8 +9,8 @@ use crate::cli::{InitTarget, Scope};
 use crate::config::home_dir;
 use crate::i18n::I18n;
 
-/// Embedded shnote rules content
-const SHNOTE_RULES: &str = r#"# shnote - Shell Command Wrapper
+/// Embedded shnote rules content (shared by all targets)
+const SHNOTE_RULES_BASE: &str = r#"# shnote - Shell Command Wrapper
 
 ## 概述
 
@@ -338,9 +338,24 @@ file2.txt
 这使得 AI Agent 可以轻松追踪每个命令的意图和执行结果。
 "#;
 
+/// Codex-specific additions to the shnote rules
+const SHNOTE_RULES_CODEX_EXTRA: &str = r#"## Codex 额外规则
+
+除非用户明确要求，否则默认使用 **Read** 工具和 **apply_patch** 工具来完成阅读与修改文件的操作，不要用 shnote 来做读取/编辑。
+"#;
+
 /// Marker to identify shnote rules section in append mode
 const SHNOTE_MARKER_START: &str = "\n<!-- shnote rules start -->\n";
 const SHNOTE_MARKER_END: &str = "\n<!-- shnote rules end -->\n";
+
+fn rules_for_target(target: InitTarget) -> String {
+    let mut rules = SHNOTE_RULES_BASE.to_string();
+    if matches!(target, InitTarget::Codex) {
+        rules.push_str("\n\n");
+        rules.push_str(SHNOTE_RULES_CODEX_EXTRA);
+    }
+    rules
+}
 
 pub fn run_init(i18n: &I18n, target: InitTarget, scope: Scope) -> Result<()> {
     match target {
@@ -361,6 +376,7 @@ fn get_base_dir(i18n: &I18n, scope: Scope) -> Result<PathBuf> {
 fn init_claude(i18n: &I18n, scope: Scope) -> Result<()> {
     let probe = probe_cli_tool(i18n, "claude");
     let base = get_base_dir(i18n, scope)?;
+    let rules = rules_for_target(InitTarget::Claude);
 
     // Claude Code >= 2.0.64 supports ~/.claude/rules/*.md.
     // For older versions (or when version cannot be determined), append rules to ~/.claude/CLAUDE.md.
@@ -387,7 +403,7 @@ fn init_claude(i18n: &I18n, scope: Scope) -> Result<()> {
 
         if !migrated {
             // No migration needed, just write the rules file
-            fs::write(&target_file, SHNOTE_RULES)
+            fs::write(&target_file, &rules)
                 .context(i18n.err_write_file(&target_file.display().to_string()))?;
         }
 
@@ -410,7 +426,7 @@ fn init_claude(i18n: &I18n, scope: Scope) -> Result<()> {
         fs::create_dir_all(&claude_dir)
             .context(i18n.err_create_dir(&claude_dir.display().to_string()))?;
         let target_file = claude_dir.join("CLAUDE.md");
-        append_rules(i18n, &target_file)?;
+        append_rules(i18n, &target_file, &rules)?;
         println!(
             "{}",
             i18n.init_claude_success(&target_file.display().to_string())
@@ -442,7 +458,7 @@ fn migrate_shnote_rules(i18n: &I18n, old_file: &Path, new_file: &Path) -> Result
 
     // Write extracted rules to new file (use latest rules, not old content)
     // This ensures we always have the latest version
-    fs::write(new_file, SHNOTE_RULES)
+    fs::write(new_file, SHNOTE_RULES_BASE)
         .context(i18n.err_write_file(&new_file.display().to_string()))?;
 
     // Remove shnote rules from old file
@@ -475,6 +491,7 @@ fn migrate_shnote_rules(i18n: &I18n, old_file: &Path, new_file: &Path) -> Result
 fn init_codex(i18n: &I18n, scope: Scope) -> Result<()> {
     let _ = probe_cli_tool(i18n, "codex");
     let base = get_base_dir(i18n, scope)?;
+    let rules = rules_for_target(InitTarget::Codex);
     let codex_dir = base.join(".codex");
     let target_file = codex_dir.join("AGENTS.md");
 
@@ -482,7 +499,7 @@ fn init_codex(i18n: &I18n, scope: Scope) -> Result<()> {
     fs::create_dir_all(&codex_dir)
         .context(i18n.err_create_dir(&codex_dir.display().to_string()))?;
 
-    append_rules(i18n, &target_file)?;
+    append_rules(i18n, &target_file, &rules)?;
 
     println!(
         "{}",
@@ -494,6 +511,7 @@ fn init_codex(i18n: &I18n, scope: Scope) -> Result<()> {
 fn init_gemini(i18n: &I18n, scope: Scope) -> Result<()> {
     let _ = probe_cli_tool(i18n, "gemini");
     let base = get_base_dir(i18n, scope)?;
+    let rules = rules_for_target(InitTarget::Gemini);
     let gemini_dir = base.join(".gemini");
     let target_file = gemini_dir.join("GEMINI.md");
 
@@ -501,7 +519,7 @@ fn init_gemini(i18n: &I18n, scope: Scope) -> Result<()> {
     fs::create_dir_all(&gemini_dir)
         .context(i18n.err_create_dir(&gemini_dir.display().to_string()))?;
 
-    append_rules(i18n, &target_file)?;
+    append_rules(i18n, &target_file, &rules)?;
 
     println!(
         "{}",
@@ -510,7 +528,7 @@ fn init_gemini(i18n: &I18n, scope: Scope) -> Result<()> {
     Ok(())
 }
 
-fn append_rules(i18n: &I18n, target_file: &PathBuf) -> Result<()> {
+fn append_rules(i18n: &I18n, target_file: &PathBuf, rules: &str) -> Result<()> {
     let mut content = if target_file.exists() {
         fs::read_to_string(target_file)
             .context(i18n.err_read_file(&target_file.display().to_string()))?
@@ -530,7 +548,7 @@ fn append_rules(i18n: &I18n, target_file: &PathBuf) -> Result<()> {
         let mut new_content = String::new();
         new_content.push_str(&content[..start_idx]);
         new_content.push_str(SHNOTE_MARKER_START);
-        new_content.push_str(SHNOTE_RULES);
+        new_content.push_str(rules);
         new_content.push_str(SHNOTE_MARKER_END);
         new_content.push_str(&content[end_idx..]);
 
@@ -541,7 +559,7 @@ fn append_rules(i18n: &I18n, target_file: &PathBuf) -> Result<()> {
     } else {
         // Append new rules (rewrite the file to keep behavior deterministic and testable)
         content.push_str(SHNOTE_MARKER_START);
-        content.push_str(SHNOTE_RULES);
+        content.push_str(rules);
         content.push_str(SHNOTE_MARKER_END);
 
         fs::write(target_file, content)
@@ -667,10 +685,17 @@ mod tests {
     #[test]
     fn shnote_rules_has_content() {
         // Verify rules contain expected content
-        assert!(SHNOTE_RULES.contains("shnote"));
-        assert!(SHNOTE_RULES.contains("--what"));
-        assert!(SHNOTE_RULES.contains("--why"));
-        assert!(SHNOTE_RULES.len() > 1000); // Rules should be substantial
+        assert!(SHNOTE_RULES_BASE.contains("shnote"));
+        assert!(SHNOTE_RULES_BASE.contains("--what"));
+        assert!(SHNOTE_RULES_BASE.contains("--why"));
+        assert!(SHNOTE_RULES_BASE.len() > 1000); // Rules should be substantial
+    }
+
+    #[test]
+    fn codex_rules_include_extra_instruction() {
+        let rules = rules_for_target(InitTarget::Codex);
+        assert!(rules.contains("Read"));
+        assert!(rules.contains("apply_patch"));
     }
 
     #[test]
@@ -734,7 +759,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.md");
 
-        append_rules(&i18n, &target_file).unwrap();
+        append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap();
 
         assert!(target_file.exists());
         let content = fs::read_to_string(&target_file).unwrap();
@@ -759,13 +784,13 @@ mod tests {
         )
         .unwrap();
 
-        append_rules(&i18n, &target_file).unwrap();
+        append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap();
 
         let content = fs::read_to_string(&target_file).unwrap();
         assert!(content.contains("Some content"));
         assert!(content.contains("More content"));
         assert!(!content.contains("OLD RULES"));
-        assert!(content.contains(SHNOTE_RULES));
+        assert!(content.contains(SHNOTE_RULES_BASE));
     }
 
     #[cfg(unix)]
@@ -785,7 +810,7 @@ mod tests {
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
         let content = fs::read_to_string(rules_file).unwrap();
-        assert_eq!(content, SHNOTE_RULES);
+        assert_eq!(content, rules_for_target(InitTarget::Claude));
     }
 
     #[test]
@@ -943,7 +968,7 @@ mod tests {
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
         let content = fs::read_to_string(&rules_file).unwrap();
-        assert_eq!(content, SHNOTE_RULES);
+        assert_eq!(content, rules_for_target(InitTarget::Claude));
 
         // Check old CLAUDE.md no longer has shnote rules
         let old_content = fs::read_to_string(&old_claude_md).unwrap();
@@ -1017,7 +1042,7 @@ mod tests {
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
         let content = fs::read_to_string(&rules_file).unwrap();
-        assert_eq!(content, SHNOTE_RULES);
+        assert_eq!(content, rules_for_target(InitTarget::Claude));
 
         // Check old CLAUDE.md is unchanged
         let old_content = fs::read_to_string(&old_claude_md).unwrap();
@@ -1191,11 +1216,11 @@ mod tests {
         )
         .unwrap();
 
-        append_rules(&i18n, &target_file).unwrap();
+        append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap();
 
         let content = fs::read_to_string(&target_file).unwrap();
         assert!(content.contains("before"));
-        assert!(content.contains(SHNOTE_RULES));
+        assert!(content.contains(SHNOTE_RULES_BASE));
         assert!(!content.contains("OLD RULES WITHOUT END"));
         assert!(!content.contains("after"));
     }
@@ -1207,7 +1232,7 @@ mod tests {
         let target_file = temp_dir.path().join("dir-as-file");
         fs::create_dir_all(&target_file).unwrap();
 
-        let err = append_rules(&i18n, &target_file).unwrap_err();
+        let err = append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap_err();
         // Check error chain contains the file path (use Debug format to see full chain)
         let err_debug = format!("{:?}", err);
         assert!(err_debug.contains("dir-as-file"));
@@ -1232,7 +1257,7 @@ mod tests {
         .unwrap();
         fs::set_permissions(&target_file, fs::Permissions::from_mode(0o444)).unwrap();
 
-        let err = append_rules(&i18n, &target_file).unwrap_err();
+        let err = append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap_err();
         assert!(err
             .to_string()
             .contains(&i18n.err_write_file(&target_file.display().to_string())));
@@ -1250,7 +1275,7 @@ mod tests {
         fs::write(&target_file, "existing content\n").unwrap();
         fs::set_permissions(&target_file, fs::Permissions::from_mode(0o444)).unwrap();
 
-        let err = append_rules(&i18n, &target_file).unwrap_err();
+        let err = append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap_err();
         assert!(err
             .to_string()
             .contains(&i18n.err_write_file(&target_file.display().to_string())));
@@ -1301,7 +1326,7 @@ mod tests {
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
         let content = fs::read_to_string(rules_file).unwrap();
-        assert_eq!(content, SHNOTE_RULES);
+        assert_eq!(content, rules_for_target(InitTarget::Claude));
 
         // CLAUDE.md should not exist
         let claude_md = temp_dir.path().join(".claude/CLAUDE.md");
@@ -1327,6 +1352,7 @@ mod tests {
         let content = fs::read_to_string(target_file).unwrap();
         assert!(content.contains(SHNOTE_MARKER_START));
         assert!(content.contains("shnote"));
+        assert!(content.contains("apply_patch"));
     }
 
     #[test]
