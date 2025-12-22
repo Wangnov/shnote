@@ -309,6 +309,15 @@ struct RulesFile {
 }
 
 fn check_rules_after_update(i18n: &I18n, install_path: &PathBuf) -> Result<()> {
+    let mut stdin = io::stdin().lock();
+    check_rules_after_update_with_reader(i18n, install_path, &mut stdin)
+}
+
+fn check_rules_after_update_with_reader(
+    i18n: &I18n,
+    install_path: &PathBuf,
+    reader: &mut dyn BufRead,
+) -> Result<()> {
     let rules_files = find_rules_files();
     if rules_files.is_empty() {
         return Ok(());
@@ -326,7 +335,7 @@ fn check_rules_after_update(i18n: &I18n, install_path: &PathBuf) -> Result<()> {
                 "{}",
                 i18n.update_rules_outdated(&file.path.display().to_string())
             );
-            if prompt_yes_no(i18n.update_rules_confirm_update())? {
+            if prompt_yes_no_with_reader(i18n.update_rules_confirm_update(), reader)? {
                 run_init_with_binary(i18n, install_path, file.target)?;
             } else {
                 println!("{}", i18n.update_rules_skipped());
@@ -351,7 +360,7 @@ fn check_rules_after_update(i18n: &I18n, install_path: &PathBuf) -> Result<()> {
             reference,
             &file.rules,
         );
-        if prompt_yes_no(i18n.update_rules_confirm_overwrite())? {
+        if prompt_yes_no_with_reader(i18n.update_rules_confirm_overwrite(), reader)? {
             run_init_with_binary(i18n, install_path, file.target)?;
         } else {
             println!("{}", i18n.update_rules_skipped());
@@ -517,10 +526,15 @@ fn lcs_table(old_lines: &[&str], new_lines: &[&str]) -> Vec<Vec<usize>> {
 }
 
 fn prompt_yes_no(prompt: &str) -> Result<bool> {
+    let mut stdin = io::stdin().lock();
+    prompt_yes_no_with_reader(prompt, &mut stdin)
+}
+
+fn prompt_yes_no_with_reader(prompt: &str, reader: &mut dyn BufRead) -> Result<bool> {
     print!("{prompt} [y/N] ");
     io::stdout().flush()?;
     let mut input = String::new();
-    io::stdin().lock().read_line(&mut input)?;
+    reader.read_line(&mut input)?;
     let input = input.trim().to_lowercase();
     Ok(input == "y" || input == "yes")
 }
@@ -552,6 +566,13 @@ fn init_target_arg(target: InitTarget) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::init::{rules_for_target_with_pueue, SHNOTE_MARKER_END, SHNOTE_MARKER_START};
+    use crate::i18n::Lang;
+    use crate::test_support::{env_lock, EnvVarGuard};
+    #[cfg(unix)]
+    use crate::test_support::write_executable;
+    use std::io::Cursor;
+    use tempfile::TempDir;
 
     #[test]
     fn apply_github_proxy_without_proxy() {
@@ -603,5 +624,315 @@ mod tests {
         // Test "hash" only format
         fs::write(&checksum_file, "ABC123DEF456").unwrap();
         assert_eq!(read_checksum_file(&checksum_file).unwrap(), "abc123def456");
+    }
+
+    #[test]
+    fn extract_shnote_rules_uses_markers() {
+        let content = format!(
+            "before{start}RULES{end}after",
+            start = SHNOTE_MARKER_START,
+            end = SHNOTE_MARKER_END
+        );
+        assert_eq!(extract_shnote_rules(&content), Some("RULES".to_string()));
+    }
+
+    #[test]
+    fn extract_shnote_rules_handles_missing_end_marker() {
+        let content = format!("before{start}RULES", start = SHNOTE_MARKER_START);
+        assert_eq!(extract_shnote_rules(&content), Some("RULES".to_string()));
+    }
+
+    #[test]
+    fn render_diff_marks_changes() {
+        let diff = render_diff("a\nb\n", "a\nc\n");
+        assert!(diff.contains("-b"));
+        assert!(diff.contains("+c"));
+    }
+
+    #[test]
+    fn pick_reference_template_prefers_closer_match() {
+        let a = "line1\nline2\n";
+        let b = "line1\nline3\n";
+        let rules = "line1\nline2\nline4\n";
+        let chosen = pick_reference_template(rules, a, b);
+        assert_eq!(chosen, a);
+    }
+
+    #[test]
+    fn prompt_yes_no_with_reader_accepts_yes() {
+        let mut input = Cursor::new("y\n");
+        assert!(prompt_yes_no_with_reader("ok?", &mut input).unwrap());
+    }
+
+    #[test]
+    fn prompt_yes_no_with_reader_rejects_default() {
+        let mut input = Cursor::new("\n");
+        assert!(!prompt_yes_no_with_reader("ok?", &mut input).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn download_file_prefers_curl() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let tools_dir = temp_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+
+        let curl = tools_dir.join("curl");
+        write_executable(
+            &curl,
+            "#!/bin/sh\n\
+            dest=\"\"\n\
+            while [ \"$1\" != \"\" ]; do\n\
+              if [ \"$1\" = \"-o\" ]; then\n\
+                shift\n\
+                dest=\"$1\"\n\
+              fi\n\
+              shift\n\
+            done\n\
+            echo \"curl\" > \"$dest\"\n\
+            exit 0\n",
+        )
+        .unwrap();
+
+        let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
+
+        let out = temp_dir.path().join("out.txt");
+        download_file(&i18n, "https://example.invalid/file", &out).unwrap();
+        assert_eq!(fs::read_to_string(&out).unwrap().trim(), "curl");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn download_file_falls_back_to_wget() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let tools_dir = temp_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+
+        let curl = tools_dir.join("curl");
+        write_executable(&curl, "#!/bin/sh\nexit 1\n").unwrap();
+
+        let wget = tools_dir.join("wget");
+        write_executable(
+            &wget,
+            "#!/bin/sh\n\
+            dest=\"\"\n\
+            while [ \"$1\" != \"\" ]; do\n\
+              if [ \"$1\" = \"-O\" ]; then\n\
+                shift\n\
+                dest=\"$1\"\n\
+              fi\n\
+              shift\n\
+            done\n\
+            echo \"wget\" > \"$dest\"\n\
+            exit 0\n",
+        )
+        .unwrap();
+
+        let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
+
+        let out = temp_dir.path().join("out.txt");
+        download_file(&i18n, "https://example.invalid/file", &out).unwrap();
+        assert_eq!(fs::read_to_string(&out).unwrap().trim(), "wget");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn download_file_errors_when_no_tool_available() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let tools_dir = temp_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+
+        let curl = tools_dir.join("curl");
+        write_executable(&curl, "#!/bin/sh\nexit 1\n").unwrap();
+
+        let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
+
+        let out = temp_dir.path().join("out.txt");
+        let err = download_file(&i18n, "https://example.invalid/file", &out).unwrap_err();
+        assert!(err.to_string().contains(i18n.err_download_no_tool()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn compute_sha256_uses_shasum_output() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let tools_dir = temp_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+
+        let shasum = tools_dir.join("shasum");
+        write_executable(&shasum, "#!/bin/sh\necho \"deadbeef  $2\"\nexit 0\n").unwrap();
+
+        let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
+
+        let file = temp_dir.path().join("bin");
+        fs::write(&file, "data").unwrap();
+        let hash = compute_sha256(&i18n, &file).unwrap();
+        assert_eq!(hash, "deadbeef");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn download_and_install_writes_binary() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let tools_dir = temp_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+
+        let curl = tools_dir.join("curl");
+        write_executable(
+            &curl,
+            "#!/bin/sh\n\
+            dest=\"\"\n\
+            while [ \"$1\" != \"\" ]; do\n\
+              if [ \"$1\" = \"-o\" ]; then\n\
+                shift\n\
+                dest=\"$1\"\n\
+              fi\n\
+              shift\n\
+            done\n\
+            case \"$dest\" in\n\
+              *.sha256) printf \"deadbeef\" > \"$dest\" ;;\n\
+              *) printf \"binary\" > \"$dest\" ;;\n\
+            esac\n\
+            exit 0\n",
+        )
+        .unwrap();
+
+        let shasum = tools_dir.join("shasum");
+        write_executable(&shasum, "#!/bin/sh\necho \"deadbeef  $2\"\nexit 0\n").unwrap();
+
+        let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
+
+        let install_dir = TempDir::new().unwrap();
+        let install_path = install_dir.path().join("shnote");
+        download_and_install(&i18n, "0.0.0", &install_path).unwrap();
+
+        assert_eq!(fs::read_to_string(&install_path).unwrap(), "binary");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn download_and_install_rejects_bad_checksum() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let tools_dir = temp_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+
+        let curl = tools_dir.join("curl");
+        write_executable(
+            &curl,
+            "#!/bin/sh\n\
+            dest=\"\"\n\
+            while [ \"$1\" != \"\" ]; do\n\
+              if [ \"$1\" = \"-o\" ]; then\n\
+                shift\n\
+                dest=\"$1\"\n\
+              fi\n\
+              shift\n\
+            done\n\
+            case \"$dest\" in\n\
+              *.sha256) printf \"deadbeef\" > \"$dest\" ;;\n\
+              *) printf \"binary\" > \"$dest\" ;;\n\
+            esac\n\
+            exit 0\n",
+        )
+        .unwrap();
+
+        let shasum = tools_dir.join("shasum");
+        write_executable(&shasum, "#!/bin/sh\necho \"bad  $2\"\nexit 0\n").unwrap();
+
+        let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
+
+        let install_dir = TempDir::new().unwrap();
+        let install_path = install_dir.path().join("shnote");
+        let err = download_and_install(&i18n, "0.0.0", &install_path).unwrap_err();
+        assert!(err.to_string().contains("checksum"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn check_rules_after_update_updates_unmodified_rules() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        let rules = rules_for_target_with_pueue(&i18n, InitTarget::Codex, true);
+        let codex_dir = temp_dir.path().join(".codex");
+        fs::create_dir_all(&codex_dir).unwrap();
+        let rules_path = codex_dir.join("AGENTS.md");
+        let content = format!(
+            "prefix{start}{rules}{end}suffix",
+            start = SHNOTE_MARKER_START,
+            end = SHNOTE_MARKER_END,
+            rules = rules
+        );
+        fs::write(&rules_path, content).unwrap();
+
+        let install_dir = TempDir::new().unwrap();
+        let output_path = install_dir.path().join("args.txt");
+        let binary_path = install_dir.path().join("shnote");
+        write_executable(
+            &binary_path,
+            &format!(
+                "#!/bin/sh\n\
+                echo \"$@\" > \"{}\"\n\
+                exit 0\n",
+                output_path.display()
+            ),
+        )
+        .unwrap();
+
+        let mut input = Cursor::new("y\n");
+        check_rules_after_update_with_reader(&i18n, &binary_path, &mut input).unwrap();
+
+        let args = fs::read_to_string(&output_path).unwrap();
+        assert!(args.contains("--lang"));
+        assert!(args.contains("init"));
+        assert!(args.contains("codex"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn check_rules_after_update_reports_modified_rules() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        let codex_dir = temp_dir.path().join(".codex");
+        fs::create_dir_all(&codex_dir).unwrap();
+        let rules_path = codex_dir.join("AGENTS.md");
+        let content = format!(
+            "prefix{start}custom rules{end}suffix",
+            start = SHNOTE_MARKER_START,
+            end = SHNOTE_MARKER_END
+        );
+        fs::write(&rules_path, content).unwrap();
+
+        let install_dir = TempDir::new().unwrap();
+        let binary_path = install_dir.path().join("shnote");
+        write_executable(&binary_path, "#!/bin/sh\nexit 0\n").unwrap();
+
+        let mut input = Cursor::new("n\n");
+        check_rules_after_update_with_reader(&i18n, &binary_path, &mut input).unwrap();
     }
 }

@@ -102,6 +102,7 @@ pub fn get_default_install_dir() -> Option<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n::Lang;
 
     #[test]
     fn version_is_set() {
@@ -139,5 +140,37 @@ mod tests {
         assert!(dir.is_some());
         let dir = dir.unwrap();
         assert!(dir.ends_with(".local/bin") || dir.ends_with(".local\\bin"));
+    }
+
+    #[test]
+    fn run_info_handles_missing_pueue() {
+        use crate::test_support::{env_lock, EnvVarGuard};
+        use tempfile::TempDir;
+
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        let i18n = I18n::new(Lang::En);
+        run_info(&i18n).unwrap();
+    }
+
+    #[test]
+    fn run_info_reports_installed_pueue() {
+        use crate::test_support::{env_lock, EnvVarGuard};
+        use std::fs;
+        use tempfile::TempDir;
+
+        let _lock = env_lock();
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+
+        let bin_dir = temp_dir.path().join(".shnote").join("bin");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join(pueue_binary_name()), "").unwrap();
+        fs::write(bin_dir.join(pueued_binary_name()), "").unwrap();
+
+        let i18n = I18n::new(Lang::En);
+        run_info(&i18n).unwrap();
     }
 }

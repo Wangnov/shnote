@@ -1442,6 +1442,97 @@ mod tests {
     }
 
     #[test]
+    fn i18n_update_messages() {
+        let en = I18n::new(Lang::En);
+        let zh = I18n::new(Lang::Zh);
+
+        assert!(!en.update_checking().is_empty());
+        assert!(!zh.update_checking().is_empty());
+
+        assert!(!en.update_current_version().is_empty());
+        assert!(!zh.update_current_version().is_empty());
+
+        assert!(!en.update_latest_version().is_empty());
+        assert!(!zh.update_latest_version().is_empty());
+
+        assert!(!en.update_already_latest().is_empty());
+        assert!(!zh.update_already_latest().is_empty());
+
+        assert!(en.update_available("1.2.3").contains("1.2.3"));
+        assert!(zh.update_available("1.2.3").contains("1.2.3"));
+
+        assert!(en.update_downloading("1.2.3").contains("1.2.3"));
+        assert!(zh.update_downloading("1.2.3").contains("1.2.3"));
+
+        assert!(!en.update_using_proxy().is_empty());
+        assert!(!zh.update_using_proxy().is_empty());
+
+        assert!(!en.update_verifying().is_empty());
+        assert!(!zh.update_verifying().is_empty());
+
+        assert!(!en.update_installing().is_empty());
+        assert!(!zh.update_installing().is_empty());
+
+        assert!(en.update_success("1.2.3").contains("1.2.3"));
+        assert!(zh.update_success("1.2.3").contains("1.2.3"));
+
+        assert!(!en.update_rules_checking().is_empty());
+        assert!(!zh.update_rules_checking().is_empty());
+
+        assert!(en.update_rules_outdated("/tmp/AGENTS.md").contains("/tmp/AGENTS.md"));
+        assert!(zh.update_rules_outdated("/tmp/AGENTS.md").contains("/tmp/AGENTS.md"));
+
+        assert!(en.update_rules_modified("/tmp/AGENTS.md").contains("/tmp/AGENTS.md"));
+        assert!(zh.update_rules_modified("/tmp/AGENTS.md").contains("/tmp/AGENTS.md"));
+
+        assert!(en
+            .update_rules_diff_header("/tmp/AGENTS.md")
+            .contains("/tmp/AGENTS.md"));
+        assert!(zh
+            .update_rules_diff_header("/tmp/AGENTS.md")
+            .contains("/tmp/AGENTS.md"));
+
+        assert!(!en.update_rules_diff_base().is_empty());
+        assert!(!zh.update_rules_diff_base().is_empty());
+
+        assert!(!en.update_rules_diff_current().is_empty());
+        assert!(!zh.update_rules_diff_current().is_empty());
+
+        assert!(!en.update_rules_confirm_update().is_empty());
+        assert!(!zh.update_rules_confirm_update().is_empty());
+
+        assert!(!en.update_rules_confirm_overwrite().is_empty());
+        assert!(!zh.update_rules_confirm_overwrite().is_empty());
+
+        assert!(!en.update_rules_skipped().is_empty());
+        assert!(!zh.update_rules_skipped().is_empty());
+
+        assert!(!en.update_rules_err_init().is_empty());
+        assert!(!zh.update_rules_err_init().is_empty());
+
+        assert!(!en.update_err_install_path().is_empty());
+        assert!(!zh.update_err_install_path().is_empty());
+
+        assert!(!en.update_err_temp_dir().is_empty());
+        assert!(!zh.update_err_temp_dir().is_empty());
+
+        assert!(!en.update_err_read_version().is_empty());
+        assert!(!zh.update_err_read_version().is_empty());
+
+        assert!(!en.update_err_replace_binary().is_empty());
+        assert!(!zh.update_err_replace_binary().is_empty());
+
+        assert!(!en.update_err_rename_old().is_empty());
+        assert!(!zh.update_err_rename_old().is_empty());
+
+        assert!(!en.help_arg_update_check().is_empty());
+        assert!(!zh.help_arg_update_check().is_empty());
+
+        assert!(!en.help_arg_update_force().is_empty());
+        assert!(!zh.help_arg_update_force().is_empty());
+    }
+
+    #[test]
     fn i18n_config_error_messages() {
         let en = I18n::new(Lang::En);
         let zh = I18n::new(Lang::Zh);
