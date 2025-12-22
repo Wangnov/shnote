@@ -44,6 +44,10 @@ impl I18n {
         Self { lang }
     }
 
+    pub fn lang(&self) -> Lang {
+        self.lang
+    }
+
     // CLI messages
     pub fn err_missing_what_why(&self, cmd: &str) -> String {
         match self.lang {
@@ -541,8 +545,8 @@ impl I18n {
 
     pub fn help_cmd_config(&self) -> &'static str {
         match self.lang {
-            Lang::En => "Manage configuration",
-            Lang::Zh => "管理配置",
+            Lang::En => "Manage configuration\n\nAvailable keys and suggested values:\n  python     - Python interpreter path (e.g., python3, /usr/bin/python3)\n  node       - Node.js interpreter path (e.g., node, /usr/local/bin/node)\n  shell      - auto|sh|bash|zsh|pwsh|cmd\n  language   - auto|zh|en\n  output     - default|quiet\n  color      - true|false\n  what_color - default|black|red|green|yellow|blue|magenta|cyan|white|bright_black|bright_red|bright_green|bright_yellow|bright_blue|bright_magenta|bright_cyan|bright_white\n  why_color  - same as what_color",
+            Lang::Zh => "管理配置\n\n可配置项与建议值：\n  python     - Python 解释器路径（例：python3，/usr/bin/python3）\n  node       - Node.js 解释器路径（例：node，/usr/local/bin/node）\n  shell      - auto|sh|bash|zsh|pwsh|cmd\n  language   - auto|zh|en\n  output     - default|quiet\n  color      - true|false\n  what_color - default|black|red|green|yellow|blue|magenta|cyan|white|bright_black|bright_red|bright_green|bright_yellow|bright_blue|bright_magenta|bright_cyan|bright_white\n  why_color  - 同 what_color",
         }
     }
 
@@ -679,24 +683,22 @@ impl I18n {
     // Config args
     pub fn help_arg_config_key(&self) -> &'static str {
         match self.lang {
-            Lang::En => {
-                "Configuration key (e.g., python, node, shell, language, output, color, what_color, why_color)"
-            }
-            Lang::Zh => "配置键（如 python、node、shell、language、output、color、what_color、why_color）",
+            Lang::En => "Configuration key (see `shnote config -h` for all keys/values)",
+            Lang::Zh => "配置键（完整列表见 `shnote config -h`）",
         }
     }
 
     pub fn help_arg_config_key_short(&self) -> &'static str {
         match self.lang {
-            Lang::En => "Configuration key",
-            Lang::Zh => "配置键",
+            Lang::En => "Configuration key (see `shnote config -h`)",
+            Lang::Zh => "配置键（详见 `shnote config -h`）",
         }
     }
 
     pub fn help_arg_config_value(&self) -> &'static str {
         match self.lang {
-            Lang::En => "Configuration value",
-            Lang::Zh => "配置值",
+            Lang::En => "Configuration value (see `shnote config -h` for valid values)",
+            Lang::Zh => "配置值（可用值见 `shnote config -h`）",
         }
     }
 

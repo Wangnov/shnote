@@ -7,7 +7,7 @@ use which::which;
 
 use crate::cli::{InitTarget, Scope};
 use crate::config::home_dir;
-use crate::i18n::I18n;
+use crate::i18n::{I18n, Lang};
 
 /// Embedded shnote rules content (shared by all targets)
 const SHNOTE_RULES_BASE: &str = r#"# shnote - Shell Command Wrapper
@@ -18,7 +18,7 @@ shnote 是一个命令包装器，强制在执行命令前填写 WHAT（做什�
 
 ## 重要规则
 
-**当你需要执行任何 shell 命令时，必须使用 shnote 而不是直接使用 Bash/shell_command 工具。**
+**当你需要执行任何 shell 命令时，必须使用 shnote 而不是直接使用内建的命令执行工具。**
 
 > 备注：`--what/--why` 只允许用于执行类子命令：`run`、`py`、`node`、`pip`、`npm`、`npx`。  
 > 对于 `config/init/setup/doctor/completions` 等管理命令，请直接运行 `shnote <subcommand>`（不要带 `--what/--why`），否则会报错。
@@ -227,9 +227,9 @@ shnote --what "测试 API" --why "验证接口" run uvx httpie GET https://api.e
 
 ## 不需要使用 shnote 的情况
 
-以下命令可以直接使用 Bash 工具执行，不需要通过 shnote：
+以下命令可以直接使用对应工具执行，不需要通过 shnote：
 
-1. **Agent 自身的操作**：如读取文件、编辑文件等（使用专用工具）
+{{NON_SHNOTE_TOOLS}}
 
 ## 长时间运行的命令（使用 pueue）
 
@@ -338,21 +338,403 @@ file2.txt
 这使得 AI Agent 可以轻松追踪每个命令的意图和执行结果。
 "#;
 
-/// Codex-specific additions to the shnote rules
+const SHNOTE_RULES_BASE_EN: &str = r#"# shnote - Shell Command Wrapper
+
+## Overview
+
+shnote is a command wrapper that forces WHAT (what the command does) and WHY (why it is needed) before execution. This helps users quickly understand complex commands composed by AI Agents.
+
+## Important Rules
+
+**When you need to execute any shell command, you must use shnote instead of the built-in command execution tool.**
+
+> Note: `--what/--why` are only allowed for execution subcommands: `run`, `py`, `node`, `pip`, `npm`, `npx`.  
+> For management commands like `config/init/setup/doctor/completions`, run `shnote <subcommand>` directly (do NOT add `--what/--why`), or it will error.
+
+### Correct Usage
+
+```bash
+# Use shnote to execute commands
+shnote --what "List files" --why "Inspect project structure" run ls -la
+
+# Run Python scripts
+shnote --what "Run test script" --why "Verify functionality" py -c 'print("test")'
+
+# Run Node.js scripts
+shnote --what "Process JSON" --why "Transform config format" node -c 'console.log(JSON.stringify({a:1}))'
+
+# Install Python packages
+shnote --what "Install requests" --why "Need HTTP client" pip install requests
+
+# Install Node packages
+shnote --what "Install axios" --why "Need HTTP client" npm install axios
+```
+
+### Incorrect Usage
+
+```bash
+# Do NOT run commands directly
+ls -la  # wrong!
+
+# Do NOT omit --what and --why
+shnote run ls -la  # wrong! missing --what and --why
+```
+
+## Command Formats
+
+### run - Execute any shell command
+
+```bash
+shnote --what "<what>" --why "<why>" run <command> [args...]
+```
+
+### py - Execute Python scripts
+
+```bash
+# Inline code
+shnote --what "<what>" --why "<why>" py -c '<code>'
+
+# File
+shnote --what "<what>" --why "<why>" py -f <script.py>
+
+# Read from stdin
+shnote --what "<what>" --why "<why>" py --stdin <<'EOF'
+<multi-line code>
+EOF
+```
+
+### node - Execute Node.js scripts
+
+```bash
+# Inline code
+shnote --what "<what>" --why "<why>" node -c '<code>'
+
+# File
+shnote --what "<what>" --why "<why>" node -f <script.js>
+```
+
+### Inline Code Notes
+
+**Python f-string limitation**: f-string expressions cannot contain backslashes
+
+```bash
+# Wrong: backslash in f-string expression
+shnote --what "<what>" --why "<why>" py -c 'print(f"Time: {datetime.now().strftime(\"%Y-%m-%d\")}")'
+
+# Correct: assign format string to a variable first
+shnote --what "<what>" --why "<why>" py -c 'from datetime import datetime; fmt="%Y-%m-%d"; print(f"Time: {datetime.now().strftime(fmt)}")'
+```
+
+**Quote nesting**: use single quotes outside and double quotes inside (or vice versa)
+
+```bash
+# Correct: single outside, double inside
+shnote --what "<what>" --why "<why>" py -c 'print("Hello World")'
+shnote --what "<what>" --why "<why>" node -c 'console.log("Hello World")'
+
+# Correct: double outside, single inside (escape outer quotes)
+shnote --what "<what>" --why "<why>" py -c "print('Hello World')"
+```
+
+### pip - Python package manager
+
+Uses the configured Python environment's pip (internally via `python -m pip`).
+
+```bash
+# Install packages
+shnote --what "Install requests" --why "Need HTTP client" pip install requests
+
+# List installed packages
+shnote --what "List packages" --why "Check dependencies" pip list
+
+# Uninstall a package
+shnote --what "Remove old version" --why "Resolve conflicts" pip uninstall package-name
+```
+
+### npm - Node.js package manager
+
+Uses npm next to the configured node.
+
+```bash
+# Install dependencies
+shnote --what "Install deps" --why "Initialize project" npm install
+
+# Install a specific package
+shnote --what "Install axios" --why "Need HTTP client" npm install axios
+
+# Run a script
+shnote --what "Run build" --why "Prepare release" npm run build
+```
+
+### npx - Node.js package runner
+
+Uses npx next to the configured node.
+
+```bash
+# Run a one-off command
+shnote --what "Create React app" --why "Bootstrap project" npx create-react-app my-app
+
+# Run a local package
+shnote --what "Run eslint" --why "Lint code" npx eslint src/
+```
+
+## Recommended: use uv to avoid polluting system Python
+
+If you have [uv](https://github.com/astral-sh/uv), **strongly** prefer `uv run` or `uvx` for scripts and tools instead of installing to system pip.
+
+### Why uv?
+
+- Automatically manages ephemeral venvs without polluting system pip
+- Packages are downloaded once and reused via symlinks
+- Supports PEP 723 inline dependency declarations
+- Very fast installs
+
+### Use uv run with dependencies
+
+```bash
+# Use --with to specify deps (recommended)
+# Note: some packages have implicit deps (e.g., qrcode requires pillow)
+shnote --what "Generate QR code" --why "Create share link" run uv run --with qrcode --with pillow python -c "import qrcode; qrcode.make('hello').save('qr.png')"
+
+# Multiple deps: repeat --with
+shnote --what "Process data" --why "Analyze CSV" run uv run --with pandas --with numpy python script.py
+
+# Run a script with PEP 723 inline dependencies
+shnote --what "Run analysis" --why "Generate report" run uv run analysis.py
+```
+
+PEP 723 inline deps example (script.py):
+```python
+# /// script
+# dependencies = ["requests", "pandas"]
+# ///
+import requests
+import pandas as pd
+# ...
+```
+
+### Use uvx for one-off tools
+
+`uvx` is like `uv tool run`, for one-off CLI tools:
+
+```bash
+# Run black formatter
+shnote --what "Format code" --why "Unify style" run uvx black src/
+
+# Run ruff linter
+shnote --what "Lint code" --why "Find issues" run uvx ruff check .
+
+# Use httpie
+shnote --what "Test API" --why "Verify endpoint" run uvx httpie GET https://api.example.com/users
+```
+
+### When to use pip vs uv
+
+| Scenario | Recommended |
+|----------|-------------|
+| One-off script with deps | `uv run --with pkg` |
+| One-off CLI tool | `uvx tool-name` |
+| Project dev with persistent deps | `pip install` |
+| uv not installed | `pip install` |
+
+## How to write --what / --why
+
+### --what
+
+- Concise description of what the command does
+- Start with a verb
+- Examples: "List files", "Build project", "Run tests"
+
+### --why
+
+- Explain why the command is needed
+- Provide context
+- Examples: "Inspect project structure", "Prepare release", "Verify fix"
+
+## When NOT to use shnote
+
+The following operations can use the corresponding tool directly and do not need shnote:
+
+{{NON_SHNOTE_TOOLS}}
+
+## Long-running commands (use pueue)
+
+For **long-running** or **continuous** commands, you must run them via pueue in the background to avoid blocking the Agent.
+
+> If `pueue/pueued` is not available, run `shnote setup` to install them to shnote's bin directory (usually `~/.shnote/bin`) and add it to PATH, or install pueue manually.
+
+### When to use pueue
+
+- Start dev servers (`npm run dev`, `python -m http.server`, `cargo run`, etc.)
+- File watchers / hot reload (`npm run watch`, `tsc --watch`, etc.)
+- Long compile jobs
+- Any command expected to run more than a few seconds or continuously
+
+### pueue usage
+
+```bash
+# Add background task
+shnote --what "<what>" --why "<why>" run pueue add -- <command> [args...]
+
+# List tasks
+shnote --what "List tasks" --why "Check service status" run pueue status
+
+# View task logs (note: pueue status does not take task ID)
+shnote --what "View task logs" --why "Debug service" run pueue log <task_id>
+
+# Stop task
+shnote --what "Stop task" --why "Shut down service" run pueue kill <task_id>
+```
+
+### pueue caveats
+
+**Complex command limitations**: pueue is sensitive to quoting. For these cases, prefer a script file:
+
+| Problem | Solution |
+|---------|----------|
+| Multi-line commands | Write a script file and run it |
+| Quote nesting (e.g., f-string) | Write a script file |
+| `python` not found | Use full path `/usr/bin/python3` |
+
+```bash
+# Wrong: complex quoting may fail
+pueue add -- python -c 'print(f"value: {x}")'
+
+# Correct: write a script file first
+echo 'print(f"value: {x}")' > /tmp/script.py
+shnote --what "Run background script" --why "Avoid quoting issues" run pueue add -- /usr/bin/python3 /tmp/script.py
+```
+
+## Example Scenarios
+
+### Scenario 1: System info
+
+```bash
+shnote --what "Show system info" --why "Diagnose environment" run uname -a
+```
+
+### Scenario 2: Start a service (background)
+
+```bash
+shnote --what "Start dev server" --why "Test feature locally" run pueue add -- npm run dev
+```
+
+### Scenario 3: Data processing (uv)
+
+```bash
+# Recommended: use uv run to avoid polluting system env
+shnote --what "Analyze logs" --why "Count errors" run uv run --with pandas python -c 'import pandas as pd; print(pd.read_csv("log.csv")["error"].sum())'
+```
+
+### Scenario 4: One-off tool (uvx)
+
+```bash
+# Recommended: use uvx for one-off tools
+shnote --what "Format JSON" --why "Pretty-print config" run uvx python-json-tool < config.json
+```
+
+### Scenario 5: Install project deps
+
+```bash
+shnote --what "Install deps" --why "Initialize dev env" pip install -r requirements.txt
+```
+
+### Scenario 6: Batch operations
+
+```bash
+shnote --what "Batch rename files" --why "Standardize naming" run find . -name "*.txt" -exec mv {} {}.bak \;
+```
+
+## Output Format
+
+shnote prints WHAT and WHY before the command output:
+
+```
+WHAT: List files
+WHY:  Inspect project structure
+<actual command output...>
+```
+
+> Note: If you pipe/filter shnote output (e.g., `| tail -5`, `| head -20`, `| grep ...`), those tools may drop the first two lines, so WHAT/WHY might not appear in the final output.
+> This does not affect shnote's enforcement: `--what/--why` must appear before the subcommand, and they are still recorded in the actual command.
+
+This makes it easy to trace the intent and result of commands orchestrated by the AI Agent.
+"#;
+
+/// Codex-specific additions to the shnote rules (ZH)
 const SHNOTE_RULES_CODEX_EXTRA: &str = r#"## Codex 额外规则
 
-除非用户明确要求，否则默认使用 **Read** 工具和 **apply_patch** 工具来完成阅读与修改文件的操作，不要用 shnote 来做读取/编辑。
+除非用户明确要求，否则默认调用 **Read** 工具和 **apply_patch** 工具来完成阅读与修改文件的操作，不要用 shnote 来做读取/编辑。
+"#;
+
+/// Codex-specific additions to the shnote rules (EN)
+const SHNOTE_RULES_CODEX_EXTRA_EN: &str = r#"## Codex Extra Rules
+
+Unless the user explicitly asks, default to **Read** and **apply_patch** for reading/editing files. Do not use shnote for file reading/editing.
+"#;
+
+/// Claude-specific additions to the shnote rules (ZH)
+const SHNOTE_RULES_CLAUDE_EXTRA: &str = r#"## Claude Code 额外规则
+
+**只有 Bash 工具才必须使用 shnote**；Read / Write / Edit 等工具一律不使用 shnote。
+"#;
+
+/// Claude-specific additions to the shnote rules (EN)
+const SHNOTE_RULES_CLAUDE_EXTRA_EN: &str = r#"## Claude Code Extra Rules
+
+**Only the Bash tool must use shnote**; Read / Write / Edit tools must not use shnote.
+"#;
+
+/// Gemini-specific additions to the shnote rules (ZH)
+const SHNOTE_RULES_GEMINI_EXTRA: &str = r#"## Gemini 额外规则
+
+**仅 run_shell_command 需要使用 shnote**；list_directory / read_file / write_file / replace 等工具一律不使用 shnote。
+"#;
+
+/// Gemini-specific additions to the shnote rules (EN)
+const SHNOTE_RULES_GEMINI_EXTRA_EN: &str = r#"## Gemini Extra Rules
+
+**Only run_shell_command uses shnote**; list_directory / read_file / write_file / replace tools must not use shnote.
 "#;
 
 /// Marker to identify shnote rules section in append mode
 const SHNOTE_MARKER_START: &str = "\n<!-- shnote rules start -->\n";
 const SHNOTE_MARKER_END: &str = "\n<!-- shnote rules end -->\n";
 
-fn rules_for_target(target: InitTarget) -> String {
-    let mut rules = SHNOTE_RULES_BASE.to_string();
-    if matches!(target, InitTarget::Codex) {
+fn non_shnote_tools_for_target(lang: Lang, target: InitTarget) -> &'static str {
+    match (lang, target) {
+        (Lang::Zh, InitTarget::Codex) => "1. **Agent 自身的操作**：如读取文件（使用 functions.read_file 工具）、列出目录内容（使用 functions.list_dir 工具）、编辑文件等（使用 functions.apply_patch 工具）。",
+        (Lang::En, InitTarget::Codex) => "1. **Agent self-operations**: read files (functions.read_file), list directories (functions.list_dir), edit files (functions.apply_patch).",
+        (Lang::Zh, InitTarget::Claude) => "1. **仅 Bash 工具必须使用 shnote**：Read / Write / Edit 等工具不使用 shnote。",
+        (Lang::En, InitTarget::Claude) => "1. **Only the Bash tool must use shnote**: Read / Write / Edit tools must not use shnote.",
+        (Lang::Zh, InitTarget::Gemini) => "1. **仅 run_shell_command 需要使用 shnote**：list_directory / read_file / write_file / replace 等工具不使用 shnote。",
+        (Lang::En, InitTarget::Gemini) => "1. **Only run_shell_command uses shnote**: list_directory / read_file / write_file / replace tools must not use shnote.",
+    }
+}
+
+fn extra_rules_for_target(lang: Lang, target: InitTarget) -> Option<&'static str> {
+    match (lang, target) {
+        (Lang::Zh, InitTarget::Codex) => Some(SHNOTE_RULES_CODEX_EXTRA),
+        (Lang::En, InitTarget::Codex) => Some(SHNOTE_RULES_CODEX_EXTRA_EN),
+        (Lang::Zh, InitTarget::Claude) => Some(SHNOTE_RULES_CLAUDE_EXTRA),
+        (Lang::En, InitTarget::Claude) => Some(SHNOTE_RULES_CLAUDE_EXTRA_EN),
+        (Lang::Zh, InitTarget::Gemini) => Some(SHNOTE_RULES_GEMINI_EXTRA),
+        (Lang::En, InitTarget::Gemini) => Some(SHNOTE_RULES_GEMINI_EXTRA_EN),
+    }
+}
+
+fn rules_for_target(i18n: &I18n, target: InitTarget) -> String {
+    let template = match i18n.lang() {
+        Lang::Zh => SHNOTE_RULES_BASE,
+        Lang::En => SHNOTE_RULES_BASE_EN,
+    };
+    let mut rules = template.replace(
+        "{{NON_SHNOTE_TOOLS}}",
+        non_shnote_tools_for_target(i18n.lang(), target),
+    );
+    if let Some(extra) = extra_rules_for_target(i18n.lang(), target) {
         rules.push_str("\n\n");
-        rules.push_str(SHNOTE_RULES_CODEX_EXTRA);
+        rules.push_str(extra);
     }
     rules
 }
@@ -376,7 +758,7 @@ fn get_base_dir(i18n: &I18n, scope: Scope) -> Result<PathBuf> {
 fn init_claude(i18n: &I18n, scope: Scope) -> Result<()> {
     let probe = probe_cli_tool(i18n, "claude");
     let base = get_base_dir(i18n, scope)?;
-    let rules = rules_for_target(InitTarget::Claude);
+    let rules = rules_for_target(i18n, InitTarget::Claude);
 
     // Claude Code >= 2.0.64 supports ~/.claude/rules/*.md.
     // For older versions (or when version cannot be determined), append rules to ~/.claude/CLAUDE.md.
@@ -396,7 +778,7 @@ fn init_claude(i18n: &I18n, scope: Scope) -> Result<()> {
 
         // Check if old CLAUDE.md has shnote rules that need migration
         let migrated = if old_claude_md.exists() {
-            migrate_shnote_rules(i18n, &old_claude_md, &target_file)?
+            migrate_shnote_rules(i18n, &old_claude_md, &target_file, &rules)?
         } else {
             false
         };
@@ -438,7 +820,12 @@ fn init_claude(i18n: &I18n, scope: Scope) -> Result<()> {
 
 /// Migrate shnote rules from old CLAUDE.md to new rules file.
 /// Returns true if migration was performed, false if no old rules found.
-fn migrate_shnote_rules(i18n: &I18n, old_file: &Path, new_file: &Path) -> Result<bool> {
+fn migrate_shnote_rules(
+    i18n: &I18n,
+    old_file: &Path,
+    new_file: &Path,
+    rules: &str,
+) -> Result<bool> {
     let content = fs::read_to_string(old_file)
         .context(i18n.err_read_file(&old_file.display().to_string()))?;
 
@@ -458,8 +845,7 @@ fn migrate_shnote_rules(i18n: &I18n, old_file: &Path, new_file: &Path) -> Result
 
     // Write extracted rules to new file (use latest rules, not old content)
     // This ensures we always have the latest version
-    fs::write(new_file, SHNOTE_RULES_BASE)
-        .context(i18n.err_write_file(&new_file.display().to_string()))?;
+    fs::write(new_file, rules).context(i18n.err_write_file(&new_file.display().to_string()))?;
 
     // Remove shnote rules from old file
     let marker_end_idx = content
@@ -491,7 +877,7 @@ fn migrate_shnote_rules(i18n: &I18n, old_file: &Path, new_file: &Path) -> Result
 fn init_codex(i18n: &I18n, scope: Scope) -> Result<()> {
     let _ = probe_cli_tool(i18n, "codex");
     let base = get_base_dir(i18n, scope)?;
-    let rules = rules_for_target(InitTarget::Codex);
+    let rules = rules_for_target(i18n, InitTarget::Codex);
     let codex_dir = base.join(".codex");
     let target_file = codex_dir.join("AGENTS.md");
 
@@ -511,7 +897,7 @@ fn init_codex(i18n: &I18n, scope: Scope) -> Result<()> {
 fn init_gemini(i18n: &I18n, scope: Scope) -> Result<()> {
     let _ = probe_cli_tool(i18n, "gemini");
     let base = get_base_dir(i18n, scope)?;
-    let rules = rules_for_target(InitTarget::Gemini);
+    let rules = rules_for_target(i18n, InitTarget::Gemini);
     let gemini_dir = base.join(".gemini");
     let target_file = gemini_dir.join("GEMINI.md");
 
@@ -686,14 +1072,19 @@ mod tests {
     fn shnote_rules_has_content() {
         // Verify rules contain expected content
         assert!(SHNOTE_RULES_BASE.contains("shnote"));
+        assert!(SHNOTE_RULES_BASE_EN.contains("shnote"));
         assert!(SHNOTE_RULES_BASE.contains("--what"));
+        assert!(SHNOTE_RULES_BASE_EN.contains("--what"));
         assert!(SHNOTE_RULES_BASE.contains("--why"));
+        assert!(SHNOTE_RULES_BASE_EN.contains("--why"));
         assert!(SHNOTE_RULES_BASE.len() > 1000); // Rules should be substantial
+        assert!(SHNOTE_RULES_BASE_EN.len() > 1000);
     }
 
     #[test]
     fn codex_rules_include_extra_instruction() {
-        let rules = rules_for_target(InitTarget::Codex);
+        let i18n = test_i18n();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
         assert!(rules.contains("Read"));
         assert!(rules.contains("apply_patch"));
     }
@@ -759,13 +1150,15 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let target_file = temp_dir.path().join("test.md");
 
-        append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        append_rules(&i18n, &target_file, &rules).unwrap();
 
         assert!(target_file.exists());
         let content = fs::read_to_string(&target_file).unwrap();
         assert!(content.contains(SHNOTE_MARKER_START));
         assert!(content.contains(SHNOTE_MARKER_END));
         assert!(content.contains("shnote"));
+        assert!(!content.contains("{{NON_SHNOTE_TOOLS}}"));
     }
 
     #[test]
@@ -784,13 +1177,14 @@ mod tests {
         )
         .unwrap();
 
-        append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        append_rules(&i18n, &target_file, &rules).unwrap();
 
         let content = fs::read_to_string(&target_file).unwrap();
         assert!(content.contains("Some content"));
         assert!(content.contains("More content"));
         assert!(!content.contains("OLD RULES"));
-        assert!(content.contains(SHNOTE_RULES_BASE));
+        assert!(content.contains(&rules));
     }
 
     #[cfg(unix)]
@@ -810,7 +1204,7 @@ mod tests {
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
         let content = fs::read_to_string(rules_file).unwrap();
-        assert_eq!(content, rules_for_target(InitTarget::Claude));
+        assert_eq!(content, rules_for_target(&i18n, InitTarget::Claude));
     }
 
     #[test]
@@ -968,7 +1362,7 @@ mod tests {
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
         let content = fs::read_to_string(&rules_file).unwrap();
-        assert_eq!(content, rules_for_target(InitTarget::Claude));
+        assert_eq!(content, rules_for_target(&i18n, InitTarget::Claude));
 
         // Check old CLAUDE.md no longer has shnote rules
         let old_content = fs::read_to_string(&old_claude_md).unwrap();
@@ -1042,7 +1436,7 @@ mod tests {
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
         let content = fs::read_to_string(&rules_file).unwrap();
-        assert_eq!(content, rules_for_target(InitTarget::Claude));
+        assert_eq!(content, rules_for_target(&i18n, InitTarget::Claude));
 
         // Check old CLAUDE.md is unchanged
         let old_content = fs::read_to_string(&old_claude_md).unwrap();
@@ -1058,7 +1452,8 @@ mod tests {
 
         fs::write(&old_file, "Some content without markers").unwrap();
 
-        let migrated = migrate_shnote_rules(&i18n, &old_file, &new_file).unwrap();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        let migrated = migrate_shnote_rules(&i18n, &old_file, &new_file, &rules).unwrap();
         assert!(!migrated);
         assert!(!new_file.exists());
     }
@@ -1077,7 +1472,8 @@ mod tests {
         )
         .unwrap();
 
-        let migrated = migrate_shnote_rules(&i18n, &old_file, &new_file).unwrap();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        let migrated = migrate_shnote_rules(&i18n, &old_file, &new_file, &rules).unwrap();
         assert!(migrated);
         assert!(new_file.exists());
 
@@ -1093,7 +1489,8 @@ mod tests {
         let old_file = temp_dir.path().join("nonexistent.md");
         let new_file = temp_dir.path().join("new.md");
 
-        let err = migrate_shnote_rules(&i18n, &old_file, &new_file).unwrap_err();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        let err = migrate_shnote_rules(&i18n, &old_file, &new_file, &rules).unwrap_err();
         assert!(err
             .to_string()
             .contains(&i18n.err_read_file(&old_file.display().to_string())));
@@ -1114,7 +1511,8 @@ mod tests {
         )
         .unwrap();
 
-        let err = migrate_shnote_rules(&i18n, &old_file, &new_file).unwrap_err();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        let err = migrate_shnote_rules(&i18n, &old_file, &new_file, &rules).unwrap_err();
         assert!(err
             .to_string()
             .contains(&i18n.err_write_file(&new_file.display().to_string())));
@@ -1216,11 +1614,12 @@ mod tests {
         )
         .unwrap();
 
-        append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        append_rules(&i18n, &target_file, &rules).unwrap();
 
         let content = fs::read_to_string(&target_file).unwrap();
         assert!(content.contains("before"));
-        assert!(content.contains(SHNOTE_RULES_BASE));
+        assert!(content.contains(&rules));
         assert!(!content.contains("OLD RULES WITHOUT END"));
         assert!(!content.contains("after"));
     }
@@ -1232,7 +1631,8 @@ mod tests {
         let target_file = temp_dir.path().join("dir-as-file");
         fs::create_dir_all(&target_file).unwrap();
 
-        let err = append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap_err();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        let err = append_rules(&i18n, &target_file, &rules).unwrap_err();
         // Check error chain contains the file path (use Debug format to see full chain)
         let err_debug = format!("{:?}", err);
         assert!(err_debug.contains("dir-as-file"));
@@ -1257,7 +1657,8 @@ mod tests {
         .unwrap();
         fs::set_permissions(&target_file, fs::Permissions::from_mode(0o444)).unwrap();
 
-        let err = append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap_err();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        let err = append_rules(&i18n, &target_file, &rules).unwrap_err();
         assert!(err
             .to_string()
             .contains(&i18n.err_write_file(&target_file.display().to_string())));
@@ -1275,7 +1676,8 @@ mod tests {
         fs::write(&target_file, "existing content\n").unwrap();
         fs::set_permissions(&target_file, fs::Permissions::from_mode(0o444)).unwrap();
 
-        let err = append_rules(&i18n, &target_file, SHNOTE_RULES_BASE).unwrap_err();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        let err = append_rules(&i18n, &target_file, &rules).unwrap_err();
         assert!(err
             .to_string()
             .contains(&i18n.err_write_file(&target_file.display().to_string())));
@@ -1326,7 +1728,7 @@ mod tests {
         let rules_file = temp_dir.path().join(".claude/rules/shnote.md");
         assert!(rules_file.exists());
         let content = fs::read_to_string(rules_file).unwrap();
-        assert_eq!(content, rules_for_target(InitTarget::Claude));
+        assert_eq!(content, rules_for_target(&i18n, InitTarget::Claude));
 
         // CLAUDE.md should not exist
         let claude_md = temp_dir.path().join(".claude/CLAUDE.md");
