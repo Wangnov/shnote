@@ -8,6 +8,7 @@ use which::which;
 use crate::cli::{InitTarget, Scope};
 use crate::config::home_dir;
 use crate::i18n::{I18n, Lang};
+use crate::pueue::pueue_available;
 
 /// Embedded shnote rules content (shared by all targets)
 const SHNOTE_RULES_BASE: &str = r#"# shnote - Shell Command Wrapper
@@ -231,53 +232,7 @@ shnote --what "测试 API" --why "验证接口" run uvx httpie GET https://api.e
 
 {{NON_SHNOTE_TOOLS}}
 
-## 长时间运行的命令（使用 pueue）
-
-对于**长时间运行**或**持续运行**的命令，必须通过 pueue 放到后台执行，避免阻塞 Agent。
-
-> 如果环境里没有 `pueue/pueued`，可以先运行 `shnote setup`（会安装到 shnote 的 bin 目录，通常为 `~/.shnote/bin`，并提示如何加入 PATH），或自行安装 pueue。
-
-### 需要使用 pueue 的场景
-
-- 启动开发服务器（`npm run dev`、`python -m http.server`、`cargo run` 等）
-- 文件监听/热重载（`npm run watch`、`tsc --watch` 等）
-- 长时间编译任务
-- 任何预期运行时间超过几秒或持续运行的命令
-
-### pueue 使用格式
-
-```bash
-# 添加后台任务
-shnote --what "<做什么>" --why "<为什么>" run pueue add -- <command> [args...]
-
-# 查看所有任务状态
-shnote --what "查看后台任务" --why "检查服务运行状态" run pueue status
-
-# 查看特定任务日志（注意：pueue status 不接受任务 ID）
-shnote --what "查看任务日志" --why "调试服务问题" run pueue log <task_id>
-
-# 停止任务
-shnote --what "停止后台任务" --why "关闭服务" run pueue kill <task_id>
-```
-
-### pueue 注意事项
-
-**复杂命令的限制**：pueue 对命令的引号处理比较敏感，以下情况建议写成脚本文件：
-
-| 问题场景 | 解决方案 |
-|----------|----------|
-| 多行命令 | 写成脚本文件再运行 |
-| 引号嵌套（如 f-string） | 写成脚本文件再运行 |
-| `python` 命令找不到 | 使用完整路径 `/usr/bin/python3` |
-
-```bash
-# 错误示例：复杂引号嵌套可能失败
-pueue add -- python -c 'print(f"value: {x}")'
-
-# 正确做法：先写脚本文件
-echo 'print(f"value: {x}")' > /tmp/script.py
-shnote --what "运行后台脚本" --why "避免引号问题" run pueue add -- /usr/bin/python3 /tmp/script.py
-```
+{{PUEUE_SECTION}}
 
 ## 示例场景
 
@@ -557,53 +512,7 @@ The following operations can use the corresponding tool directly and do not need
 
 {{NON_SHNOTE_TOOLS}}
 
-## Long-running commands (use pueue)
-
-For **long-running** or **continuous** commands, you must run them via pueue in the background to avoid blocking the Agent.
-
-> If `pueue/pueued` is not available, run `shnote setup` to install them to shnote's bin directory (usually `~/.shnote/bin`) and add it to PATH, or install pueue manually.
-
-### When to use pueue
-
-- Start dev servers (`npm run dev`, `python -m http.server`, `cargo run`, etc.)
-- File watchers / hot reload (`npm run watch`, `tsc --watch`, etc.)
-- Long compile jobs
-- Any command expected to run more than a few seconds or continuously
-
-### pueue usage
-
-```bash
-# Add background task
-shnote --what "<what>" --why "<why>" run pueue add -- <command> [args...]
-
-# List tasks
-shnote --what "List tasks" --why "Check service status" run pueue status
-
-# View task logs (note: pueue status does not take task ID)
-shnote --what "View task logs" --why "Debug service" run pueue log <task_id>
-
-# Stop task
-shnote --what "Stop task" --why "Shut down service" run pueue kill <task_id>
-```
-
-### pueue caveats
-
-**Complex command limitations**: pueue is sensitive to quoting. For these cases, prefer a script file:
-
-| Problem | Solution |
-|---------|----------|
-| Multi-line commands | Write a script file and run it |
-| Quote nesting (e.g., f-string) | Write a script file |
-| `python` not found | Use full path `/usr/bin/python3` |
-
-```bash
-# Wrong: complex quoting may fail
-pueue add -- python -c 'print(f"value: {x}")'
-
-# Correct: write a script file first
-echo 'print(f"value: {x}")' > /tmp/script.py
-shnote --what "Run background script" --why "Avoid quoting issues" run pueue add -- /usr/bin/python3 /tmp/script.py
-```
+{{PUEUE_SECTION}}
 
 ## Example Scenarios
 
@@ -661,6 +570,104 @@ WHY:  Inspect project structure
 This makes it easy to trace the intent and result of commands orchestrated by the AI Agent.
 "#;
 
+const SHNOTE_RULES_PUEUE_ZH: &str = r#"## 长时间运行的命令（使用 pueue）
+
+对于**长时间运行**或**持续运行**的命令，必须通过 pueue 放到后台执行，避免阻塞 Agent。
+
+> 如果环境里没有 `pueue/pueued`，可以先运行 `shnote setup`（会安装到 shnote 的 bin 目录，通常为 `~/.shnote/bin`，并提示如何加入 PATH），或自行安装 pueue。
+
+### 需要使用 pueue 的场景
+
+- 启动开发服务器（`npm run dev`、`python -m http.server`、`cargo run` 等）
+- 文件监听/热重载（`npm run watch`、`tsc --watch` 等）
+- 长时间编译任务
+- 任何预期运行时间超过几秒或持续运行的命令
+
+### pueue 使用格式
+
+```bash
+# 添加后台任务
+shnote --what "<做什么>" --why "<为什么>" run pueue add -- <command> [args...]
+
+# 查看所有任务状态
+shnote --what "查看后台任务" --why "检查服务运行状态" run pueue status
+
+# 查看特定任务日志（注意：pueue status 不接受任务 ID）
+shnote --what "查看任务日志" --why "调试服务问题" run pueue log <task_id>
+
+# 停止任务
+shnote --what "停止后台任务" --why "关闭服务" run pueue kill <task_id>
+```
+
+### pueue 注意事项
+
+**复杂命令的限制**：pueue 对命令的引号处理比较敏感，以下情况建议写成脚本文件：
+
+| 问题场景 | 解决方案 |
+|----------|----------|
+| 多行命令 | 写成脚本文件再运行 |
+| 引号嵌套（如 f-string） | 写成脚本文件再运行 |
+| `python` 命令找不到 | 使用完整路径 `/usr/bin/python3` |
+
+```bash
+# 错误示例：复杂引号嵌套可能失败
+pueue add -- python -c 'print(f"value: {x}")'
+
+# 正确做法：先写脚本文件
+echo 'print(f"value: {x}")' > /tmp/script.py
+shnote --what "运行后台脚本" --why "避免引号问题" run pueue add -- /usr/bin/python3 /tmp/script.py
+```
+"#;
+
+const SHNOTE_RULES_PUEUE_EN: &str = r#"## Long-running commands (use pueue)
+
+For **long-running** or **continuous** commands, you must run them via pueue in the background to avoid blocking the Agent.
+
+> If `pueue/pueued` is not available, run `shnote setup` to install them to shnote's bin directory (usually `~/.shnote/bin`) and add it to PATH, or install pueue manually.
+
+### When to use pueue
+
+- Start dev servers (`npm run dev`, `python -m http.server`, `cargo run`, etc.)
+- File watchers / hot reload (`npm run watch`, `tsc --watch`, etc.)
+- Long compile jobs
+- Any command expected to run more than a few seconds or continuously
+
+### pueue usage
+
+```bash
+# Add background task
+shnote --what "<what>" --why "<why>" run pueue add -- <command> [args...]
+
+# List tasks
+shnote --what "List tasks" --why "Check service status" run pueue status
+
+# View task logs (note: pueue status does not take task ID)
+shnote --what "View task logs" --why "Debug service" run pueue log <task_id>
+
+# Stop task
+shnote --what "Stop task" --why "Shut down service" run pueue kill <task_id>
+```
+
+### pueue caveats
+
+**Complex command limitations**: pueue is sensitive to quoting. For these cases, prefer a script file:
+
+| Problem | Solution |
+|---------|----------|
+| Multi-line commands | Write a script file and run it |
+| Quote nesting (e.g., f-string) | Write a script file |
+| `python` not found | Use full path `/usr/bin/python3` |
+
+```bash
+# Wrong: complex quoting may fail
+pueue add -- python -c 'print(f"value: {x}")'
+
+# Correct: write a script file first
+echo 'print(f"value: {x}")' > /tmp/script.py
+shnote --what "Run background script" --why "Avoid quoting issues" run pueue add -- /usr/bin/python3 /tmp/script.py
+```
+"#;
+
 /// Codex-specific additions to the shnote rules (ZH)
 const SHNOTE_RULES_CODEX_EXTRA: &str = r#"## Codex 额外规则
 
@@ -712,6 +719,13 @@ fn non_shnote_tools_for_target(lang: Lang, target: InitTarget) -> &'static str {
     }
 }
 
+fn pueue_section_for_lang(lang: Lang) -> &'static str {
+    match lang {
+        Lang::Zh => SHNOTE_RULES_PUEUE_ZH,
+        Lang::En => SHNOTE_RULES_PUEUE_EN,
+    }
+}
+
 fn extra_rules_for_target(lang: Lang, target: InitTarget) -> Option<&'static str> {
     match (lang, target) {
         (Lang::Zh, InitTarget::Codex) => Some(SHNOTE_RULES_CODEX_EXTRA),
@@ -732,6 +746,12 @@ fn rules_for_target(i18n: &I18n, target: InitTarget) -> String {
         "{{NON_SHNOTE_TOOLS}}",
         non_shnote_tools_for_target(i18n.lang(), target),
     );
+    let pueue_section = if pueue_available() {
+        pueue_section_for_lang(i18n.lang())
+    } else {
+        ""
+    };
+    rules = rules.replace("{{PUEUE_SECTION}}", pueue_section);
     if let Some(extra) = extra_rules_for_target(i18n.lang(), target) {
         rules.push_str("\n\n");
         rules.push_str(extra);
@@ -1057,6 +1077,7 @@ fn parse_semver_from_text(text: &str) -> Option<SemVer> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{pueue_binary_name, pueued_binary_name, shnote_bin_dir};
     use crate::i18n::Lang;
     #[cfg(unix)]
     use crate::test_support::write_executable;
@@ -1087,6 +1108,37 @@ mod tests {
         let rules = rules_for_target(&i18n, InitTarget::Codex);
         assert!(rules.contains("Read"));
         assert!(rules.contains("apply_patch"));
+    }
+
+    #[test]
+    fn rules_include_pueue_section_when_available() {
+        let _lock = env_lock();
+
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+        let _path_guard = EnvVarGuard::set("PATH", temp_dir.path());
+
+        let bin_dir = shnote_bin_dir().unwrap();
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::write(bin_dir.join(pueue_binary_name()), "stub").unwrap();
+        fs::write(bin_dir.join(pueued_binary_name()), "stub").unwrap();
+
+        let i18n = test_i18n();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        assert!(rules.contains("Long-running commands (use pueue)"));
+    }
+
+    #[test]
+    fn rules_skip_pueue_section_when_missing() {
+        let _lock = env_lock();
+
+        let temp_dir = TempDir::new().unwrap();
+        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
+        let _path_guard = EnvVarGuard::set("PATH", temp_dir.path());
+
+        let i18n = test_i18n();
+        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        assert!(!rules.contains("Long-running commands (use pueue)"));
     }
 
     #[test]
