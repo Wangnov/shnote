@@ -21,6 +21,8 @@ shnote 是一个命令包装器，强制在执行命令前填写 WHAT（做什�
 
 **当你需要执行任何 shell 命令时，必须使用 shnote 而不是直接使用内建的命令执行工具。**
 
+> 若后续“额外规则”与此处冲突，以额外规则为准（其优先级更高）。
+
 > 备注：`--what/--why` 只允许用于执行类子命令：`run`、`py`、`node`、`pip`、`npm`、`npx`。  
 > 对于 `config/init/setup/doctor/completions` 等管理命令，请直接运行 `shnote <subcommand>`（不要带 `--what/--why`），否则会报错。
 
@@ -302,6 +304,8 @@ shnote is a command wrapper that forces WHAT (what the command does) and WHY (wh
 ## Important Rules
 
 **When you need to execute any shell command, you must use shnote instead of the built-in command execution tool.**
+
+> If any later "extra rules" conflict with this section, the extra rules take precedence.
 
 > Note: `--what/--why` are only allowed for execution subcommands: `run`, `py`, `node`, `pip`, `npm`, `npx`.  
 > For management commands like `config/init/setup/doctor/completions`, run `shnote <subcommand>` directly (do NOT add `--what/--why`), or it will error.
@@ -671,13 +675,43 @@ shnote --what "Run background script" --why "Avoid quoting issues" run pueue add
 /// Codex-specific additions to the shnote rules (ZH)
 const SHNOTE_RULES_CODEX_EXTRA: &str = r#"## Codex 额外规则
 
-除非用户明确要求，否则默认调用 **Read** 工具和 **apply_patch** 工具来完成阅读与修改文件的操作，不要用 shnote 来做读取/编辑。
+### 规则优先级
+以下 Codex 额外规则 **优先级高于** 基础规则，若有冲突以此为准。
+
+### 文件只读展示：必须直接用 shell（不使用 shnote）
+出于 Codex CLI 展示层渲染效果，**读取/预览文件内容时不要使用 shnote**，直接执行以下命令或其管道组合：
+
+- cat file.txt
+- head -n 50 file.txt
+- tail -n 30 file.txt
+- sed -n '1,200p' file.txt
+- cat file.txt | sed -n '1,200p'
+- nl -ba file.txt
+
+只读展示指：不改变任何文件/系统状态、仅输出到终端的命令。
+
+编辑文件时默认使用 **apply_patch**（或内建编辑工具）；读取/预览请遵循上面的直接 shell 规则，不要用 shnote。
 "#;
 
 /// Codex-specific additions to the shnote rules (EN)
 const SHNOTE_RULES_CODEX_EXTRA_EN: &str = r#"## Codex Extra Rules
 
-Unless the user explicitly asks, default to **Read** and **apply_patch** for reading/editing files. Do not use shnote for file reading/editing.
+### Priority
+These Codex extra rules **override** the base rules if there is any conflict.
+
+### Read-only file display: must use direct shell (no shnote)
+For Codex CLI rendering, **do NOT use shnote** when you only need to read/preview file contents. Run these commands (or their pipelines) directly:
+
+- cat file.txt
+- head -n 50 file.txt
+- tail -n 30 file.txt
+- sed -n '1,200p' file.txt
+- cat file.txt | sed -n '1,200p'
+- nl -ba file.txt
+
+Read-only means no filesystem/system state changes, only output to the terminal.
+
+For edits, default to **apply_patch** (or built-in edit tools). For read/preview, follow the direct shell rule above (no shnote).
 "#;
 
 /// Claude-specific additions to the shnote rules (ZH)
@@ -710,8 +744,8 @@ const SHNOTE_MARKER_END: &str = "\n<!-- shnote rules end -->\n";
 
 fn non_shnote_tools_for_target(lang: Lang, target: InitTarget) -> &'static str {
     match (lang, target) {
-        (Lang::Zh, InitTarget::Codex) => "1. **Agent 自身的操作**：如读取文件（使用 functions.read_file 工具）、列出目录内容（使用 functions.list_dir 工具）、编辑文件等（使用 functions.apply_patch 工具）。",
-        (Lang::En, InitTarget::Codex) => "1. **Agent self-operations**: read files (functions.read_file), list directories (functions.list_dir), edit files (functions.apply_patch).",
+        (Lang::Zh, InitTarget::Codex) => "1. **文件只读展示**：直接用 shell 命令读取/预览文件内容（不要用 shnote），如 `cat` / `head` / `tail` / `sed -n` / `nl -ba` 及其管道组合（如 `cat file | sed -n '1,200p'`）。\n2. **Agent 自身的操作**：如读取文件（使用 functions.read_file 工具）、列出目录内容（使用 functions.list_dir 工具）、编辑文件等（使用 functions.apply_patch 工具）。",
+        (Lang::En, InitTarget::Codex) => "1. **Read-only file display**: use direct shell commands to view file contents (do NOT use shnote), e.g. `cat` / `head` / `tail` / `sed -n` / `nl -ba` and their pipelines (e.g. `cat file | sed -n '1,200p'`).\n2. **Agent self-operations**: read files (functions.read_file), list directories (functions.list_dir), edit files (functions.apply_patch).",
         (Lang::Zh, InitTarget::Claude) => "1. **仅 Bash 工具必须使用 shnote**：Read / Write / Edit 等工具不使用 shnote。",
         (Lang::En, InitTarget::Claude) => "1. **Only the Bash tool must use shnote**: Read / Write / Edit tools must not use shnote.",
         (Lang::Zh, InitTarget::Gemini) => "1. **仅 run_shell_command 需要使用 shnote**：list_directory / read_file / write_file / replace 等工具不使用 shnote。",
