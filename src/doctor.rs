@@ -3,8 +3,9 @@ use std::process::Command;
 
 use which::which;
 
-use crate::config::{pueue_binary_name, pueued_binary_name, shnote_bin_dir, Config};
+use crate::config::Config;
 use crate::i18n::I18n;
+use crate::pueue::{find_pueue, find_pueued};
 use crate::shell::{detect_shell, get_shell_version};
 
 pub struct CheckResult {
@@ -143,44 +144,22 @@ fn check_shell(i18n: &I18n, config: &Config) -> CheckResult {
 }
 
 fn check_pueue(i18n: &I18n) -> CheckResult {
-    // First check shnote's bin directory
-    if let Some(pueue_path) = shnote_bin_dir()
-        .ok()
-        .map(|d| d.join(pueue_binary_name()))
-        .filter(|p| p.exists())
-    {
-        let version = get_interpreter_version(&pueue_path, "--version");
-        return CheckResult::success("pueue", pueue_path, version);
-    }
-
-    // Then check PATH
-    match which("pueue") {
-        Ok(p) => {
-            let version = get_interpreter_version(&p, "--version");
-            CheckResult::success("pueue", p, version)
+    match find_pueue() {
+        Some(path) => {
+            let version = get_interpreter_version(&path, "--version");
+            CheckResult::success("pueue", path, version)
         }
-        Err(_) => CheckResult::failure("pueue", i18n.doctor_pueue_not_found()),
+        None => CheckResult::failure("pueue", i18n.doctor_pueue_not_found()),
     }
 }
 
 fn check_pueued(i18n: &I18n) -> CheckResult {
-    // First check shnote's bin directory
-    if let Some(pueued_path) = shnote_bin_dir()
-        .ok()
-        .map(|d| d.join(pueued_binary_name()))
-        .filter(|p| p.exists())
-    {
-        let version = get_interpreter_version(&pueued_path, "--version");
-        return CheckResult::success("pueued", pueued_path, version);
-    }
-
-    // Then check PATH
-    match which("pueued") {
-        Ok(p) => {
-            let version = get_interpreter_version(&p, "--version");
-            CheckResult::success("pueued", p, version)
+    match find_pueued() {
+        Some(path) => {
+            let version = get_interpreter_version(&path, "--version");
+            CheckResult::success("pueued", path, version)
         }
-        Err(_) => CheckResult::failure("pueued", i18n.doctor_pueue_not_found()),
+        None => CheckResult::failure("pueued", i18n.doctor_pueue_not_found()),
     }
 }
 
@@ -206,6 +185,7 @@ fn get_interpreter_version(path: &PathBuf, flag: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::{pueue_binary_name, pueued_binary_name, shnote_bin_dir};
     use crate::i18n::Lang;
     use crate::test_support::{env_lock, EnvVarGuard};
     use tempfile::TempDir;

@@ -6,6 +6,7 @@ mod i18n;
 mod info;
 mod init;
 mod localize;
+mod pueue;
 mod pueue_embed;
 mod shell;
 #[cfg(test)]
