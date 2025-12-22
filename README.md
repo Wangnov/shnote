@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/wangnov/shnote/actions/workflows/ci.yml"><img src="https://github.com/wangnov/shnote/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://codecov.io/gh/wangnov/shnote"><img src="https://codecov.io/gh/wangnov/shnote/branch/main/graph/badge.svg" alt="Coverage"></a>
   <a href="https://github.com/wangnov/shnote/releases"><img src="https://img.shields.io/github/v/release/wangnov/shnote" alt="Release"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform">
