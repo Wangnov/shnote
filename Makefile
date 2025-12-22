@@ -115,15 +115,15 @@ release-dry:
 	cargo release patch --no-publish --no-verify
 
 # 发布 patch 版本 (0.1.5 → 0.1.6)
-release-patch:
+release-patch: ci
 	cargo release patch --execute --no-publish --no-verify --no-confirm
 
 # 发布 minor 版本 (0.1.5 → 0.2.0)
-release-minor:
+release-minor: ci
 	cargo release minor --execute --no-publish --no-verify --no-confirm
 
 # 发布 major 版本 (0.1.5 → 1.0.0)
-release-major:
+release-major: ci
 	cargo release major --execute --no-publish --no-verify --no-confirm
 
 # 检查发布准备情况

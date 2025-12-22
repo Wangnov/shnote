@@ -9,8 +9,8 @@ use anyhow::{Context, Result};
 use crate::cli::{InitTarget, UpdateArgs};
 use crate::config::home_dir;
 use crate::i18n::I18n;
-use crate::init::{rules_for_target_with_pueue, SHNOTE_MARKER_END, SHNOTE_MARKER_START};
 use crate::info::{get_install_path, PLATFORM, REPO, VERSION};
+use crate::init::{rules_for_target_with_pueue, SHNOTE_MARKER_END, SHNOTE_MARKER_START};
 
 /// URL pattern for VERSION file
 const VERSION_URL: &str = "https://github.com/{repo}/releases/latest/download/VERSION";
@@ -344,11 +344,8 @@ fn check_rules_after_update_with_reader(
             continue;
         }
 
-        let reference = pick_reference_template(
-            &file.rules,
-            &expected_with_pueue,
-            &expected_without_pueue,
-        );
+        let reference =
+            pick_reference_template(&file.rules, &expected_with_pueue, &expected_without_pueue);
 
         println!(
             "{}",
@@ -414,7 +411,11 @@ fn push_rules_file(files: &mut Vec<RulesFile>, path: PathBuf, target: InitTarget
         return;
     };
 
-    files.push(RulesFile { target, path, rules });
+    files.push(RulesFile {
+        target,
+        path,
+        rules,
+    });
 }
 
 fn extract_shnote_rules(content: &str) -> Option<String> {
@@ -525,11 +526,6 @@ fn lcs_table(old_lines: &[&str], new_lines: &[&str]) -> Vec<Vec<usize>> {
     dp
 }
 
-fn prompt_yes_no(prompt: &str) -> Result<bool> {
-    let mut stdin = io::stdin().lock();
-    prompt_yes_no_with_reader(prompt, &mut stdin)
-}
-
 fn prompt_yes_no_with_reader(prompt: &str, reader: &mut dyn BufRead) -> Result<bool> {
     print!("{prompt} [y/N] ");
     io::stdout().flush()?;
@@ -566,11 +562,11 @@ fn init_target_arg(target: InitTarget) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::init::{rules_for_target_with_pueue, SHNOTE_MARKER_END, SHNOTE_MARKER_START};
     use crate::i18n::Lang;
-    use crate::test_support::{env_lock, EnvVarGuard};
+    use crate::init::{rules_for_target_with_pueue, SHNOTE_MARKER_END, SHNOTE_MARKER_START};
     #[cfg(unix)]
     use crate::test_support::write_executable;
+    use crate::test_support::{env_lock, EnvVarGuard};
     use std::io::Cursor;
     use tempfile::TempDir;
 

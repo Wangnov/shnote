@@ -1479,11 +1479,19 @@ mod tests {
         assert!(!en.update_rules_checking().is_empty());
         assert!(!zh.update_rules_checking().is_empty());
 
-        assert!(en.update_rules_outdated("/tmp/AGENTS.md").contains("/tmp/AGENTS.md"));
-        assert!(zh.update_rules_outdated("/tmp/AGENTS.md").contains("/tmp/AGENTS.md"));
+        assert!(en
+            .update_rules_outdated("/tmp/AGENTS.md")
+            .contains("/tmp/AGENTS.md"));
+        assert!(zh
+            .update_rules_outdated("/tmp/AGENTS.md")
+            .contains("/tmp/AGENTS.md"));
 
-        assert!(en.update_rules_modified("/tmp/AGENTS.md").contains("/tmp/AGENTS.md"));
-        assert!(zh.update_rules_modified("/tmp/AGENTS.md").contains("/tmp/AGENTS.md"));
+        assert!(en
+            .update_rules_modified("/tmp/AGENTS.md")
+            .contains("/tmp/AGENTS.md"));
+        assert!(zh
+            .update_rules_modified("/tmp/AGENTS.md")
+            .contains("/tmp/AGENTS.md"));
 
         assert!(en
             .update_rules_diff_header("/tmp/AGENTS.md")
