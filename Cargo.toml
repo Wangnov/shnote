@@ -1,6 +1,6 @@
 [package]
 name = "shnote"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 description = "A lightweight command wrapper that enforces WHAT/WHY documentation"
 license = "MIT"
