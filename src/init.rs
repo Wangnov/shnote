@@ -739,8 +739,8 @@ const SHNOTE_RULES_GEMINI_EXTRA_EN: &str = r#"## Gemini Extra Rules
 "#;
 
 /// Marker to identify shnote rules section in append mode
-const SHNOTE_MARKER_START: &str = "\n<!-- shnote rules start -->\n";
-const SHNOTE_MARKER_END: &str = "\n<!-- shnote rules end -->\n";
+pub(crate) const SHNOTE_MARKER_START: &str = "\n<!-- shnote rules start -->\n";
+pub(crate) const SHNOTE_MARKER_END: &str = "\n<!-- shnote rules end -->\n";
 
 fn non_shnote_tools_for_target(lang: Lang, target: InitTarget) -> &'static str {
     match (lang, target) {
@@ -771,7 +771,11 @@ fn extra_rules_for_target(lang: Lang, target: InitTarget) -> Option<&'static str
     }
 }
 
-fn rules_for_target(i18n: &I18n, target: InitTarget) -> String {
+pub(crate) fn rules_for_target_with_pueue(
+    i18n: &I18n,
+    target: InitTarget,
+    include_pueue: bool,
+) -> String {
     let template = match i18n.lang() {
         Lang::Zh => SHNOTE_RULES_BASE,
         Lang::En => SHNOTE_RULES_BASE_EN,
@@ -780,7 +784,7 @@ fn rules_for_target(i18n: &I18n, target: InitTarget) -> String {
         "{{NON_SHNOTE_TOOLS}}",
         non_shnote_tools_for_target(i18n.lang(), target),
     );
-    let pueue_section = if pueue_available() {
+    let pueue_section = if include_pueue {
         pueue_section_for_lang(i18n.lang())
     } else {
         ""
@@ -791,6 +795,10 @@ fn rules_for_target(i18n: &I18n, target: InitTarget) -> String {
         rules.push_str(extra);
     }
     rules
+}
+
+fn rules_for_target(i18n: &I18n, target: InitTarget) -> String {
+    rules_for_target_with_pueue(i18n, target, pueue_available())
 }
 
 pub fn run_init(i18n: &I18n, target: InitTarget, scope: Scope) -> Result<()> {

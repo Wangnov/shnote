@@ -1,12 +1,15 @@
 use std::env;
 use std::fs;
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result};
 
-use crate::cli::UpdateArgs;
+use crate::cli::{InitTarget, UpdateArgs};
+use crate::config::home_dir;
 use crate::i18n::I18n;
+use crate::init::{rules_for_target_with_pueue, SHNOTE_MARKER_END, SHNOTE_MARKER_START};
 use crate::info::{get_install_path, PLATFORM, REPO, VERSION};
 
 /// URL pattern for VERSION file
@@ -57,6 +60,9 @@ pub fn run_update(i18n: &I18n, args: UpdateArgs) -> Result<()> {
 
     println!();
     println!("{}", i18n.update_success(&format!("v{}", latest_version)));
+    println!();
+
+    check_rules_after_update(i18n, &install_path)?;
 
     Ok(())
 }
@@ -294,6 +300,253 @@ fn replace_binary(i18n: &I18n, src: &PathBuf, dest: &PathBuf) -> Result<()> {
     }
 
     Ok(())
+}
+
+struct RulesFile {
+    target: InitTarget,
+    path: PathBuf,
+    rules: String,
+}
+
+fn check_rules_after_update(i18n: &I18n, install_path: &PathBuf) -> Result<()> {
+    let rules_files = find_rules_files();
+    if rules_files.is_empty() {
+        return Ok(());
+    }
+
+    println!("{}", i18n.update_rules_checking());
+
+    for file in rules_files {
+        let expected_with_pueue = rules_for_target_with_pueue(i18n, file.target, true);
+        let expected_without_pueue = rules_for_target_with_pueue(i18n, file.target, false);
+
+        let unmodified = file.rules == expected_with_pueue || file.rules == expected_without_pueue;
+        if unmodified {
+            println!(
+                "{}",
+                i18n.update_rules_outdated(&file.path.display().to_string())
+            );
+            if prompt_yes_no(i18n.update_rules_confirm_update())? {
+                run_init_with_binary(i18n, install_path, file.target)?;
+            } else {
+                println!("{}", i18n.update_rules_skipped());
+            }
+            println!();
+            continue;
+        }
+
+        let reference = pick_reference_template(
+            &file.rules,
+            &expected_with_pueue,
+            &expected_without_pueue,
+        );
+
+        println!(
+            "{}",
+            i18n.update_rules_modified(&file.path.display().to_string())
+        );
+        print_rules_diff(
+            i18n,
+            &file.path.display().to_string(),
+            reference,
+            &file.rules,
+        );
+        if prompt_yes_no(i18n.update_rules_confirm_overwrite())? {
+            run_init_with_binary(i18n, install_path, file.target)?;
+        } else {
+            println!("{}", i18n.update_rules_skipped());
+        }
+        println!();
+    }
+
+    Ok(())
+}
+
+fn find_rules_files() -> Vec<RulesFile> {
+    let mut files = Vec::new();
+    let Ok(home) = home_dir() else {
+        return files;
+    };
+
+    push_rules_file(
+        &mut files,
+        home.join(".claude").join("rules").join("shnote.md"),
+        InitTarget::Claude,
+    );
+    push_rules_file(
+        &mut files,
+        home.join(".claude").join("CLAUDE.md"),
+        InitTarget::Claude,
+    );
+    push_rules_file(
+        &mut files,
+        home.join(".codex").join("AGENTS.md"),
+        InitTarget::Codex,
+    );
+    push_rules_file(
+        &mut files,
+        home.join(".gemini").join("GEMINI.md"),
+        InitTarget::Gemini,
+    );
+
+    files
+}
+
+fn push_rules_file(files: &mut Vec<RulesFile>, path: PathBuf, target: InitTarget) {
+    if !path.exists() {
+        return;
+    }
+
+    let Ok(content) = fs::read_to_string(&path) else {
+        return;
+    };
+
+    let Some(rules) = extract_shnote_rules(&content) else {
+        return;
+    };
+
+    files.push(RulesFile { target, path, rules });
+}
+
+fn extract_shnote_rules(content: &str) -> Option<String> {
+    let start_idx = content.find(SHNOTE_MARKER_START)?;
+    let rules_start = start_idx + SHNOTE_MARKER_START.len();
+    let rules_end = content[rules_start..]
+        .find(SHNOTE_MARKER_END)
+        .map(|i| rules_start + i)
+        .unwrap_or(content.len());
+
+    Some(content[rules_start..rules_end].to_string())
+}
+
+fn pick_reference_template<'a>(rules: &str, a: &'a str, b: &'a str) -> &'a str {
+    let score_a = diff_score(rules, a);
+    let score_b = diff_score(rules, b);
+    if score_a <= score_b {
+        a
+    } else {
+        b
+    }
+}
+
+fn print_rules_diff(i18n: &I18n, path: &str, expected: &str, actual: &str) {
+    println!("{}", i18n.update_rules_diff_header(path));
+    println!("--- {}", i18n.update_rules_diff_base());
+    println!("+++ {}", i18n.update_rules_diff_current());
+    print!("{}", render_diff(expected, actual));
+}
+
+fn render_diff(old: &str, new: &str) -> String {
+    let old_lines: Vec<&str> = old.lines().collect();
+    let new_lines: Vec<&str> = new.lines().collect();
+    let dp = lcs_table(&old_lines, &new_lines);
+
+    let mut out = String::new();
+    let mut i = 0;
+    let mut j = 0;
+    while i < old_lines.len() && j < new_lines.len() {
+        if old_lines[i] == new_lines[j] {
+            out.push(' ');
+            out.push_str(old_lines[i]);
+            out.push('\n');
+            i += 1;
+            j += 1;
+        } else if dp[i + 1][j] >= dp[i][j + 1] {
+            out.push('-');
+            out.push_str(old_lines[i]);
+            out.push('\n');
+            i += 1;
+        } else {
+            out.push('+');
+            out.push_str(new_lines[j]);
+            out.push('\n');
+            j += 1;
+        }
+    }
+    while i < old_lines.len() {
+        out.push('-');
+        out.push_str(old_lines[i]);
+        out.push('\n');
+        i += 1;
+    }
+    while j < new_lines.len() {
+        out.push('+');
+        out.push_str(new_lines[j]);
+        out.push('\n');
+        j += 1;
+    }
+
+    out
+}
+
+fn diff_score(old: &str, new: &str) -> usize {
+    let old_lines: Vec<&str> = old.lines().collect();
+    let new_lines: Vec<&str> = new.lines().collect();
+    let dp = lcs_table(&old_lines, &new_lines);
+
+    let mut score = 0;
+    let mut i = 0;
+    let mut j = 0;
+    while i < old_lines.len() && j < new_lines.len() {
+        if old_lines[i] == new_lines[j] {
+            i += 1;
+            j += 1;
+        } else if dp[i + 1][j] >= dp[i][j + 1] {
+            score += 1;
+            i += 1;
+        } else {
+            score += 1;
+            j += 1;
+        }
+    }
+    score + (old_lines.len() - i) + (new_lines.len() - j)
+}
+
+fn lcs_table(old_lines: &[&str], new_lines: &[&str]) -> Vec<Vec<usize>> {
+    let mut dp = vec![vec![0; new_lines.len() + 1]; old_lines.len() + 1];
+    for i in (0..old_lines.len()).rev() {
+        for j in (0..new_lines.len()).rev() {
+            if old_lines[i] == new_lines[j] {
+                dp[i][j] = dp[i + 1][j + 1] + 1;
+            } else {
+                dp[i][j] = dp[i + 1][j].max(dp[i][j + 1]);
+            }
+        }
+    }
+    dp
+}
+
+fn prompt_yes_no(prompt: &str) -> Result<bool> {
+    print!("{prompt} [y/N] ");
+    io::stdout().flush()?;
+    let mut input = String::new();
+    io::stdin().lock().read_line(&mut input)?;
+    let input = input.trim().to_lowercase();
+    Ok(input == "y" || input == "yes")
+}
+
+fn run_init_with_binary(i18n: &I18n, install_path: &PathBuf, target: InitTarget) -> Result<()> {
+    let status = Command::new(install_path)
+        .arg("--lang")
+        .arg(i18n.lang_tag())
+        .arg("init")
+        .arg(init_target_arg(target))
+        .status()
+        .context(i18n.update_rules_err_init())?;
+
+    if !status.success() {
+        anyhow::bail!("{}", i18n.update_rules_err_init());
+    }
+
+    Ok(())
+}
+
+fn init_target_arg(target: InitTarget) -> &'static str {
+    match target {
+        InitTarget::Claude => "claude",
+        InitTarget::Codex => "codex",
+        InitTarget::Gemini => "gemini",
+    }
 }
 
 #[cfg(test)]

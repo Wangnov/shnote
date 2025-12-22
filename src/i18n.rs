@@ -48,6 +48,13 @@ impl I18n {
         self.lang
     }
 
+    pub fn lang_tag(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "en",
+            Lang::Zh => "zh",
+        }
+    }
+
     // CLI messages
     pub fn err_missing_what_why(&self, cmd: &str) -> String {
         match self.lang {
@@ -844,6 +851,76 @@ impl I18n {
         match self.lang {
             Lang::En => format!("Successfully updated to {}!", version),
             Lang::Zh => format!("成功更新到 {}！", version),
+        }
+    }
+
+    pub fn update_rules_checking(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Checking existing shnote rules...",
+            Lang::Zh => "正在检查已有的 shnote 提示词...",
+        }
+    }
+
+    pub fn update_rules_outdated(&self, path: &str) -> String {
+        match self.lang {
+            Lang::En => format!("Outdated shnote rules detected: {}", path),
+            Lang::Zh => format!("检测到提示词版本落后：{}", path),
+        }
+    }
+
+    pub fn update_rules_modified(&self, path: &str) -> String {
+        match self.lang {
+            Lang::En => format!("Modified shnote rules detected: {}", path),
+            Lang::Zh => format!("检测到提示词包含修改：{}", path),
+        }
+    }
+
+    pub fn update_rules_diff_header(&self, path: &str) -> String {
+        match self.lang {
+            Lang::En => format!("Rules diff (bundled vs current): {}", path),
+            Lang::Zh => format!("提示词差异（内置规则 vs 当前文件）：{}", path),
+        }
+    }
+
+    pub fn update_rules_diff_base(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "bundled",
+            Lang::Zh => "内置规则",
+        }
+    }
+
+    pub fn update_rules_diff_current(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "current",
+            Lang::Zh => "当前文件",
+        }
+    }
+
+    pub fn update_rules_confirm_update(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Update shnote rules now?",
+            Lang::Zh => "是否更新提示词？",
+        }
+    }
+
+    pub fn update_rules_confirm_overwrite(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Overwrite with latest shnote rules?",
+            Lang::Zh => "是否覆盖为最新提示词？",
+        }
+    }
+
+    pub fn update_rules_skipped(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Skipped updating rules.",
+            Lang::Zh => "已跳过提示词更新。",
+        }
+    }
+
+    pub fn update_rules_err_init(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to update shnote rules",
+            Lang::Zh => "更新提示词失败",
         }
     }
 
