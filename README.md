@@ -112,6 +112,11 @@ cargo install --path .
 cargo install shnote
 ```
 
+或通过 cargo-binstall 安装（`cargo install cargo-binstall`以安装cargo-binstall， 一个直接从github release 下载预构建的二进制的安装方式，避免本地构建占用时间）
+```bash
+cargo binstall shnote
+```
+
 </details>
 
 #### 2. 初始化 AI 工具（必需）
@@ -160,8 +165,9 @@ Skills 是 Claude Code 的另一种扩展机制，但 **Bash 工具的默认优�
 
 **为什么需要 pueue？**
 
-- **Codex CLI / Gemini CLI**：没有内置的后台任务功能，长时间运行的命令会阻塞 AI，必须通过 pueue 放到后台
-- **Claude Code**：可以不使用 pueue，因为 Claude Code 有更好的设计（Background Bash 和 Async SubAgent）
+- **Gemini CLI**：没有内置的后台任务功能，长时间运行的命令会阻塞 AI，必须通过 pueue 放到后台
+- **Claude Code**：可以不使用 pueue，因为 Claude Code 有更好的设计（Background Bash 和 SubAgent，且提供了玩法多样的 Task Output ）
+- **Codex CLI**：可以不使用 pueue，因为 Claude Code 有更好的设计（Background Shell 和惊人的能直接通过 STDIN 与 Background Shell 交互的功能）
 
 安装 pueue：
 
@@ -180,7 +186,7 @@ export PATH="$HOME/.shnote/bin:$PATH"
 ```
 
 <details>
-<summary>📸 pueue 使用示例（Codex CLI）</summary>
+<summary>📸 pueue 使用示例（Codex CLI）（已过时，目前仅推荐 Gemini CLI 使用 pueue）</summary>
 
 <img src="assets/Chinese_pueue_codex.png" alt="pueue 使用示例" width="100%">
 
