@@ -112,19 +112,19 @@ clean-cov:
 
 # 预览发布（dry-run）
 release-dry:
-	cargo release patch --no-publish --no-verify
+	cargo release patch --no-verify
 
 # 发布 patch 版本 (0.1.5 → 0.1.6)
 release-patch: ci
-	cargo release patch --execute --no-publish --no-verify --no-confirm
+	cargo release patch --execute --no-verify --no-confirm
 
 # 发布 minor 版本 (0.1.5 → 0.2.0)
 release-minor: ci
-	cargo release minor --execute --no-publish --no-verify --no-confirm
+	cargo release minor --execute --no-verify --no-confirm
 
 # 发布 major 版本 (0.1.5 → 1.0.0)
 release-major: ci
-	cargo release major --execute --no-publish --no-verify --no-confirm
+	cargo release major --execute --no-verify --no-confirm
 
 # 检查发布准备情况
 publish-check:

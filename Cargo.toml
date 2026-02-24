@@ -5,6 +5,7 @@ edition = "2021"
 description = "A lightweight command wrapper that enforces WHAT/WHY documentation"
 license = "MIT"
 repository = "https://github.com/wangnov/shnote"
+homepage = "https://github.com/wangnov/shnote"
 readme = "README.md"
 keywords = [
   "rust",
@@ -27,3 +28,8 @@ which = "8.0"
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.1"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

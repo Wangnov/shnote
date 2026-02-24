@@ -61,7 +61,7 @@
 macOS / Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.sh | sh
 ```
 
 Homebrew (macOS):
@@ -74,7 +74,7 @@ brew install shnote
 Windows (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | iex
+irm https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.ps1 | iex
 ```
 
 <details>
@@ -85,13 +85,13 @@ irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | 
 macOS / Linux:
 
 ```bash
-curl -fsSL https://ghfast.top/https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | GITHUB_PROXY=https://ghfast.top sh
+curl --proto '=https' --tlsv1.2 -LsSf https://ghfast.top/https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.sh | sh
 ```
 
 Windows (PowerShell):
 
 ```powershell
-$env:GITHUB_PROXY = "https://ghfast.top"; irm https://ghfast.top/https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | iex
+irm https://ghfast.top/https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.ps1 | iex
 ```
 
 </details>
@@ -269,6 +269,7 @@ shnote config get python
 shnote config set python /usr/bin/python3
 shnote config set shell bash
 shnote config set language zh
+shnote config set header_stream auto
 shnote config set color false
 shnote config set what_color cyan
 shnote config set why_color magenta
@@ -289,6 +290,7 @@ shnote config path
 | shell | Shell 类型 (auto/sh/bash/zsh/pwsh/cmd) | auto |
 | language | 语言 (auto/zh/en) | auto |
 | output | 输出模式 (default/quiet) | default |
+| header_stream | WHAT/WHY 输出流 (auto/stdout/stderr) | auto |
 | color | WHAT/WHY 颜色开关 (true/false) | true |
 | what_color | WHAT 颜色 (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | cyan |
 | why_color | WHY 颜色 (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | magenta |
@@ -424,7 +426,7 @@ See shnote in action with different AI tools:
 macOS / Linux:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.sh | sh
 ```
 
 Homebrew (macOS):
@@ -437,7 +439,7 @@ brew install shnote
 Windows (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/wangnov/shnote/main/scripts/install.ps1 | iex
+irm https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.ps1 | iex
 ```
 
 <details>
@@ -604,6 +606,7 @@ shnote config get python
 shnote config set python /usr/bin/python3
 shnote config set shell bash
 shnote config set language en
+shnote config set header_stream auto
 shnote config set color false
 shnote config set what_color cyan
 shnote config set why_color magenta
@@ -624,6 +627,7 @@ shnote config path
 | shell | Shell type (auto/sh/bash/zsh/pwsh/cmd) | auto |
 | language | Language (auto/zh/en) | auto |
 | output | Output mode (default/quiet) | default |
+| header_stream | WHAT/WHY output stream (auto/stdout/stderr) | auto |
 | color | Colorize WHAT/WHY header (true/false) | true |
 | what_color | WHAT color (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | cyan |
 | why_color | WHY color (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | magenta |
