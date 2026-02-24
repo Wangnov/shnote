@@ -14,16 +14,25 @@ mod test_support;
 mod uninstall;
 mod update;
 
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::process::ExitCode;
 
 use anyhow::Result;
 use clap::{CommandFactory, FromArgMatches};
 use clap_complete::{generate, Shell as CompletionShell};
 
-use crate::cli::{Cli, Command, ConfigAction, Shell};
-use crate::config::Config;
+use crate::cli::{Cli, Command, ConfigAction, HeaderStream, Shell};
+use crate::config::{Config, HeaderStreamMode, HeaderTiming};
 use crate::i18n::I18n;
+
+struct HeaderPlan {
+    stream_mode: HeaderStreamMode,
+    timing: HeaderTiming,
+    what_label: String,
+    what: String,
+    why_label: String,
+    why: String,
+}
 
 fn main() -> ExitCode {
     // 1. Pre-parse to extract --lang argument (if any)
@@ -53,11 +62,14 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     }
 
-    // Output WHAT/WHY for execution commands (if not in quiet mode)
-    if cli.command.requires_what_why() && config.should_print_header() {
+    let header_plan = if cli.command.requires_what_why() && config.should_print_header() {
         // Safe: `validate_what_why` above guarantees these are present for execution commands.
         let what = cli.what.as_deref().expect("validated --what");
         let why = cli.why.as_deref().expect("validated --why");
+        let stream_mode = cli
+            .header_stream
+            .map(header_stream_arg_to_mode)
+            .unwrap_or_else(|| config.header_stream_mode());
         let use_color = config.should_color_header();
         let what_label = if use_color {
             match config.what_color_escape() {
@@ -75,14 +87,34 @@ fn main() -> ExitCode {
         } else {
             "WHY".to_string()
         };
-        println!("{what_label}: {what}");
-        println!("{why_label}:  {why}");
-        // Flush stdout to ensure WHAT/WHY appears before command output
-        let _ = io::stdout().flush();
+        Some(HeaderPlan {
+            stream_mode: resolve_header_stream(stream_mode),
+            timing: config.header_timing_mode(),
+            what_label,
+            what: what.to_string(),
+            why_label,
+            why: why.to_string(),
+        })
+    } else {
+        None
+    };
+
+    if let Some(plan) = &header_plan {
+        if matches!(plan.timing, HeaderTiming::Head | HeaderTiming::Both) {
+            let _ = emit_header(plan);
+        }
     }
 
     // Dispatch command
-    match run(&i18n, &config, cli.command) {
+    let run_result = run(&i18n, &config, cli.command);
+
+    if let Some(plan) = &header_plan {
+        if matches!(plan.timing, HeaderTiming::Tail | HeaderTiming::Both) {
+            let _ = emit_header(plan);
+        }
+    }
+
+    match run_result {
         Ok(code) => code,
         Err(e) => {
             eprintln!("error: {e:?}");
@@ -91,9 +123,63 @@ fn main() -> ExitCode {
     }
 }
 
+fn header_stream_arg_to_mode(stream: HeaderStream) -> HeaderStreamMode {
+    match stream {
+        HeaderStream::Auto => HeaderStreamMode::Auto,
+        HeaderStream::Stdout => HeaderStreamMode::Stdout,
+        HeaderStream::Stderr => HeaderStreamMode::Stderr,
+    }
+}
+
+fn resolve_header_stream(mode: HeaderStreamMode) -> HeaderStreamMode {
+    match mode {
+        HeaderStreamMode::Auto => {
+            if io::stdout().is_terminal() {
+                HeaderStreamMode::Stdout
+            } else {
+                HeaderStreamMode::Stderr
+            }
+        }
+        other => other,
+    }
+}
+
+fn write_header<W: Write>(
+    writer: &mut W,
+    what_label: &str,
+    what: &str,
+    why_label: &str,
+    why: &str,
+) -> io::Result<()> {
+    writeln!(writer, "{what_label}: {what}")?;
+    writeln!(writer, "{why_label}:  {why}")?;
+    writer.flush()
+}
+
+fn emit_header(plan: &HeaderPlan) -> io::Result<()> {
+    match plan.stream_mode {
+        HeaderStreamMode::Stdout | HeaderStreamMode::Auto => write_header(
+            &mut io::stdout(),
+            &plan.what_label,
+            &plan.what,
+            &plan.why_label,
+            &plan.why,
+        ),
+        HeaderStreamMode::Stderr => write_header(
+            &mut io::stderr(),
+            &plan.what_label,
+            &plan.what,
+            &plan.why_label,
+            &plan.why,
+        ),
+    }
+}
+
 fn run(i18n: &I18n, config: &Config, command: Command) -> Result<ExitCode> {
     match command {
         Command::Run(args) => executor::exec_run(i18n, config, args),
+
+        Command::External(command) => executor::exec_run(i18n, config, cli::RunArgs { command }),
 
         Command::Py(args) => executor::exec_py(i18n, config, args),
 

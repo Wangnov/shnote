@@ -19,6 +19,18 @@ pub struct Config {
     #[serde(default = "Config::default_output")]
     pub output: String,
 
+    /// Header stream routing: auto | stdout | stderr
+    #[serde(default = "Config::default_header_stream")]
+    pub header_stream: String,
+
+    /// Header print timing: head | tail | both
+    #[serde(default = "Config::default_header_timing")]
+    pub header_timing: String,
+
+    /// Shell mode for single-string run command: lc | ilc
+    #[serde(default = "Config::default_run_string_shell_mode")]
+    pub run_string_shell_mode: String,
+
     /// Colorize WHAT/WHY header output
     #[serde(default = "Config::default_color")]
     pub color: bool,
@@ -38,9 +50,64 @@ impl Default for Config {
             paths: PathsConfig::default(),
             i18n: I18nConfig::default(),
             output: Self::default_output(),
+            header_stream: Self::default_header_stream(),
+            header_timing: Self::default_header_timing(),
+            run_string_shell_mode: Self::default_run_string_shell_mode(),
             color: Self::default_color(),
             what_color: Self::default_what_color(),
             why_color: Self::default_why_color(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HeaderStreamMode {
+    Auto,
+    Stdout,
+    Stderr,
+}
+
+impl HeaderStreamMode {
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "auto" => Some(Self::Auto),
+            "stdout" => Some(Self::Stdout),
+            "stderr" => Some(Self::Stderr),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HeaderTiming {
+    Head,
+    Tail,
+    Both,
+}
+
+impl HeaderTiming {
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "head" => Some(Self::Head),
+            "tail" => Some(Self::Tail),
+            "both" => Some(Self::Both),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RunStringShellMode {
+    Lc,
+    Ilc,
+}
+
+impl RunStringShellMode {
+    pub fn from_str(value: &str) -> Option<Self> {
+        match value {
+            "lc" => Some(Self::Lc),
+            "ilc" => Some(Self::Ilc),
+            _ => None,
         }
     }
 }
@@ -157,6 +224,18 @@ impl Config {
         "default".to_string()
     }
 
+    fn default_header_stream() -> String {
+        "auto".to_string()
+    }
+
+    fn default_header_timing() -> String {
+        "tail".to_string()
+    }
+
+    fn default_run_string_shell_mode() -> String {
+        "lc".to_string()
+    }
+
     fn default_color() -> bool {
         true
     }
@@ -172,6 +251,25 @@ impl Config {
     /// Check if WHAT/WHY header should be printed
     pub fn should_print_header(&self) -> bool {
         self.output != "quiet"
+    }
+
+    /// Parse header stream routing mode.
+    /// Falls back to Auto for invalid or unknown values.
+    pub fn header_stream_mode(&self) -> HeaderStreamMode {
+        HeaderStreamMode::from_str(self.header_stream.as_str()).unwrap_or(HeaderStreamMode::Auto)
+    }
+
+    /// Parse header print timing mode.
+    /// Falls back to Tail for invalid or unknown values.
+    pub fn header_timing_mode(&self) -> HeaderTiming {
+        HeaderTiming::from_str(self.header_timing.as_str()).unwrap_or(HeaderTiming::Tail)
+    }
+
+    /// Parse run mode for single-string run command.
+    /// Falls back to Lc for invalid or unknown values.
+    pub fn run_string_shell_mode(&self) -> RunStringShellMode {
+        RunStringShellMode::from_str(self.run_string_shell_mode.as_str())
+            .unwrap_or(RunStringShellMode::Lc)
     }
 
     /// Check if WHAT/WHY header should be colorized
@@ -216,6 +314,9 @@ impl Config {
             "shell" => Some(self.paths.shell.clone()),
             "language" => Some(self.i18n.language.clone()),
             "output" => Some(self.output.clone()),
+            "header_stream" => Some(self.header_stream.clone()),
+            "header_timing" => Some(self.header_timing.clone()),
+            "run_string_shell_mode" => Some(self.run_string_shell_mode.clone()),
             "color" => Some(self.color.to_string()),
             "what_color" => Some(self.what_color.clone()),
             "why_color" => Some(self.why_color.clone()),
@@ -261,6 +362,42 @@ impl Config {
                     );
                 }
                 self.output = value.to_string();
+                Ok(true)
+            }
+            "header_stream" => {
+                let normalized = value.to_lowercase();
+                let valid = ["auto", "stdout", "stderr"];
+                if !valid.contains(&normalized.as_str()) {
+                    anyhow::bail!(
+                        "{}",
+                        i18n.err_invalid_header_stream_value(value, &valid.join(", "))
+                    );
+                }
+                self.header_stream = normalized;
+                Ok(true)
+            }
+            "header_timing" => {
+                let normalized = value.to_lowercase();
+                let valid = ["head", "tail", "both"];
+                if !valid.contains(&normalized.as_str()) {
+                    anyhow::bail!(
+                        "{}",
+                        i18n.err_invalid_header_timing_value(value, &valid.join(", "))
+                    );
+                }
+                self.header_timing = normalized;
+                Ok(true)
+            }
+            "run_string_shell_mode" => {
+                let normalized = value.to_lowercase();
+                let valid = ["lc", "ilc"];
+                if !valid.contains(&normalized.as_str()) {
+                    anyhow::bail!(
+                        "{}",
+                        i18n.err_invalid_run_string_shell_mode_value(value, &valid.join(", "))
+                    );
+                }
+                self.run_string_shell_mode = normalized;
                 Ok(true)
             }
             "color" => {
@@ -309,6 +446,12 @@ impl Config {
             ("shell".to_string(), self.paths.shell.clone()),
             ("language".to_string(), self.i18n.language.clone()),
             ("output".to_string(), self.output.clone()),
+            ("header_stream".to_string(), self.header_stream.clone()),
+            ("header_timing".to_string(), self.header_timing.clone()),
+            (
+                "run_string_shell_mode".to_string(),
+                self.run_string_shell_mode.clone(),
+            ),
             ("color".to_string(), self.color.to_string()),
             ("what_color".to_string(), self.what_color.clone()),
             ("why_color".to_string(), self.why_color.clone()),
@@ -383,6 +526,9 @@ mod tests {
         assert_eq!(config.paths.shell, "auto");
         assert_eq!(config.i18n.language, "auto");
         assert_eq!(config.output, "default");
+        assert_eq!(config.header_stream, "auto");
+        assert_eq!(config.header_timing, "tail");
+        assert_eq!(config.run_string_shell_mode, "lc");
         assert!(config.color);
         assert_eq!(config.what_color, "cyan");
         assert_eq!(config.why_color, "magenta");
@@ -397,6 +543,9 @@ mod tests {
         assert_eq!(config.get("shell"), Some("auto".to_string()));
         assert_eq!(config.get("language"), Some("auto".to_string()));
         assert_eq!(config.get("output"), Some("default".to_string()));
+        assert_eq!(config.get("header_stream"), Some("auto".to_string()));
+        assert_eq!(config.get("header_timing"), Some("tail".to_string()));
+        assert_eq!(config.get("run_string_shell_mode"), Some("lc".to_string()));
         assert_eq!(config.get("color"), Some("true".to_string()));
         assert_eq!(config.get("what_color"), Some("cyan".to_string()));
         assert_eq!(config.get("why_color"), Some("magenta".to_string()));
@@ -409,6 +558,15 @@ mod tests {
 
         config.set(&i18n, "output", "quiet").unwrap();
         assert_eq!(config.get("output"), Some("quiet".to_string()));
+
+        config.set(&i18n, "header_stream", "stderr").unwrap();
+        assert_eq!(config.get("header_stream"), Some("stderr".to_string()));
+
+        config.set(&i18n, "header_timing", "both").unwrap();
+        assert_eq!(config.get("header_timing"), Some("both".to_string()));
+
+        config.set(&i18n, "run_string_shell_mode", "ilc").unwrap();
+        assert_eq!(config.get("run_string_shell_mode"), Some("ilc".to_string()));
 
         config.set(&i18n, "color", "false").unwrap();
         assert_eq!(config.get("color"), Some("false".to_string()));
@@ -449,6 +607,40 @@ mod tests {
         assert!(config.set(&i18n, "output", "default").is_ok());
         assert!(config.set(&i18n, "output", "quiet").is_ok());
         assert!(config.set(&i18n, "output", "invalid").is_err());
+    }
+
+    #[test]
+    fn config_set_validates_header_stream() {
+        let i18n = test_i18n();
+        let mut config = Config::default();
+
+        assert!(config.set(&i18n, "header_stream", "auto").is_ok());
+        assert!(config.set(&i18n, "header_stream", "stdout").is_ok());
+        assert!(config.set(&i18n, "header_stream", "stderr").is_ok());
+        assert!(config.set(&i18n, "header_stream", "invalid").is_err());
+    }
+
+    #[test]
+    fn config_set_validates_header_timing() {
+        let i18n = test_i18n();
+        let mut config = Config::default();
+
+        assert!(config.set(&i18n, "header_timing", "head").is_ok());
+        assert!(config.set(&i18n, "header_timing", "tail").is_ok());
+        assert!(config.set(&i18n, "header_timing", "both").is_ok());
+        assert!(config.set(&i18n, "header_timing", "invalid").is_err());
+    }
+
+    #[test]
+    fn config_set_validates_run_string_shell_mode() {
+        let i18n = test_i18n();
+        let mut config = Config::default();
+
+        assert!(config.set(&i18n, "run_string_shell_mode", "lc").is_ok());
+        assert!(config.set(&i18n, "run_string_shell_mode", "ilc").is_ok());
+        assert!(config
+            .set(&i18n, "run_string_shell_mode", "invalid")
+            .is_err());
     }
 
     #[test]
@@ -501,6 +693,33 @@ mod tests {
     }
 
     #[test]
+    fn header_stream_mode_defaults_to_auto_for_invalid() {
+        let config = Config {
+            header_stream: "invalid".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(config.header_stream_mode(), HeaderStreamMode::Auto);
+    }
+
+    #[test]
+    fn header_timing_mode_defaults_to_tail_for_invalid() {
+        let config = Config {
+            header_timing: "invalid".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(config.header_timing_mode(), HeaderTiming::Tail);
+    }
+
+    #[test]
+    fn run_string_shell_mode_defaults_to_lc_for_invalid() {
+        let config = Config {
+            run_string_shell_mode: "invalid".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(config.run_string_shell_mode(), RunStringShellMode::Lc);
+    }
+
+    #[test]
     fn config_serialization() {
         let config = Config::default();
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -512,10 +731,13 @@ mod tests {
     fn config_list() {
         let config = Config::default();
         let list = config.list();
-        assert_eq!(list.len(), 8);
+        assert_eq!(list.len(), 11);
         assert!(list.contains(&("python".to_string(), "python3".to_string())));
         assert!(list.contains(&("node".to_string(), "node".to_string())));
         assert!(list.contains(&("output".to_string(), "default".to_string())));
+        assert!(list.contains(&("header_stream".to_string(), "auto".to_string())));
+        assert!(list.contains(&("header_timing".to_string(), "tail".to_string())));
+        assert!(list.contains(&("run_string_shell_mode".to_string(), "lc".to_string())));
         assert!(list.contains(&("color".to_string(), "true".to_string())));
         assert!(list.contains(&("what_color".to_string(), "cyan".to_string())));
         assert!(list.contains(&("why_color".to_string(), "magenta".to_string())));

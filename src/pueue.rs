@@ -18,7 +18,3 @@ pub fn find_pueue() -> Option<PathBuf> {
 pub fn find_pueued() -> Option<PathBuf> {
     find_in_shnote_bin(pueued_binary_name()).or_else(|| which("pueued").ok())
 }
-
-pub fn pueue_available() -> bool {
-    find_pueue().is_some() && find_pueued().is_some()
-}

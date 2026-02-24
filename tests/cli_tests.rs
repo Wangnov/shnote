@@ -11,6 +11,16 @@ fn shnote_cmd() -> Command {
 fn write_color_disabled_config(temp_dir: &TempDir) {
     let shnote_dir = temp_dir.path().join(".shnote");
     fs::create_dir_all(&shnote_dir).unwrap();
+    fs::write(
+        shnote_dir.join("config.toml"),
+        "color = false\nheader_stream = \"stdout\"\n",
+    )
+    .unwrap();
+}
+
+fn write_color_disabled_auto_config(temp_dir: &TempDir) {
+    let shnote_dir = temp_dir.path().join(".shnote");
+    fs::create_dir_all(&shnote_dir).unwrap();
     fs::write(shnote_dir.join("config.toml"), "color = false\n").unwrap();
 }
 
@@ -228,6 +238,184 @@ fn test_run_with_what_why() {
 }
 
 #[test]
+fn test_run_tail_header_prints_after_command_output() {
+    let temp_dir = TempDir::new().unwrap();
+    let shnote_dir = temp_dir.path().join(".shnote");
+    fs::create_dir_all(&shnote_dir).unwrap();
+    fs::write(
+        shnote_dir.join("config.toml"),
+        "color = false\nheader_stream = \"stdout\"\nheader_timing = \"tail\"\n",
+    )
+    .unwrap();
+
+    let assert = shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args([
+            "--what",
+            "tail-test",
+            "--why",
+            "tail-check",
+            "run",
+            "echo",
+            "hello",
+        ])
+        .assert()
+        .success();
+
+    let output = assert.get_output();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let hello_pos = stdout.find("hello").unwrap();
+    let what_pos = stdout.find("WHAT: tail-test").unwrap();
+    let why_pos = stdout.find("WHY:  tail-check").unwrap();
+    assert!(hello_pos < what_pos);
+    assert!(what_pos < why_pos);
+}
+
+#[test]
+fn test_run_without_subcommand_defaults_to_run() {
+    let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_config(&temp_dir);
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["--what", "测试", "--why", "验证", "echo", "hello"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("WHAT: 测试"))
+        .stdout(predicate::str::contains("WHY:  验证"))
+        .stdout(predicate::str::contains("hello"));
+}
+
+#[test]
+fn test_run_with_single_string_uses_shell_lc_default() {
+    let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_config(&temp_dir);
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args([
+            "--what",
+            "测试",
+            "--why",
+            "验证",
+            "run",
+            "echo 'hi' && echo 'hello'",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hi"))
+        .stdout(predicate::str::contains("hello"));
+}
+
+#[test]
+fn test_run_without_subcommand_single_string_uses_shell_lc_default() {
+    let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_config(&temp_dir);
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args([
+            "--what",
+            "测试",
+            "--why",
+            "验证",
+            "echo 'hi' && echo 'hello'",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("hi"))
+        .stdout(predicate::str::contains("hello"));
+}
+
+#[test]
+fn test_run_with_what_why_auto_routes_header_to_stderr_when_stdout_not_tty() {
+    let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_auto_config(&temp_dir);
+
+    let assert = shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args([
+            "--what",
+            "auto-header",
+            "--why",
+            "pipeline-safe",
+            "run",
+            "echo",
+            "hello",
+        ])
+        .assert()
+        .success();
+
+    let output = assert.get_output();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(stdout.contains("hello"));
+    assert!(!stdout.contains("WHAT: auto-header"));
+    assert!(!stdout.contains("WHY:  pipeline-safe"));
+    assert!(stderr.contains("WHAT: auto-header"));
+    assert!(stderr.contains("WHY:  pipeline-safe"));
+}
+
+#[test]
+fn test_run_with_header_stream_stdout_flag() {
+    let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_auto_config(&temp_dir);
+
+    let assert = shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args([
+            "--header-stream",
+            "stdout",
+            "--what",
+            "force-stdout",
+            "--why",
+            "display-first",
+            "run",
+            "echo",
+            "hello",
+        ])
+        .assert()
+        .success();
+
+    let output = assert.get_output();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(stdout.contains("WHAT: force-stdout"));
+    assert!(stdout.contains("WHY:  display-first"));
+    assert!(stderr.trim().is_empty());
+}
+
+#[test]
+fn test_run_with_header_stream_stderr_flag() {
+    let temp_dir = TempDir::new().unwrap();
+    write_color_disabled_auto_config(&temp_dir);
+
+    let assert = shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args([
+            "--header-stream",
+            "stderr",
+            "--what",
+            "force-stderr",
+            "--why",
+            "pipeline-safe",
+            "run",
+            "echo",
+            "hello",
+        ])
+        .assert()
+        .success();
+
+    let output = assert.get_output();
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(stdout.contains("hello"));
+    assert!(!stdout.contains("WHAT: force-stderr"));
+    assert!(stderr.contains("WHAT: force-stderr"));
+    assert!(stderr.contains("WHY:  pipeline-safe"));
+}
+
+#[test]
 fn test_run_missing_only_what() {
     shnote_cmd()
         .args(["--what", "test", "run", "echo"])
@@ -240,6 +428,15 @@ fn test_run_missing_only_what() {
 fn test_run_missing_only_why() {
     shnote_cmd()
         .args(["--why", "test", "run", "echo"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--what"));
+}
+
+#[test]
+fn test_run_without_subcommand_requires_what_why() {
+    shnote_cmd()
+        .args(["echo", "test"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("--what"));
@@ -447,7 +644,10 @@ fn test_config_list() {
         .stdout(predicate::str::contains("node"))
         .stdout(predicate::str::contains("color"))
         .stdout(predicate::str::contains("what_color"))
-        .stdout(predicate::str::contains("why_color"));
+        .stdout(predicate::str::contains("why_color"))
+        .stdout(predicate::str::contains("run_string_shell_mode"))
+        .stdout(predicate::str::contains("header_timing"))
+        .stdout(predicate::str::contains("header_stream"));
 }
 
 #[cfg(unix)]
@@ -640,6 +840,90 @@ fn test_config_set_what_why_color() {
         .assert()
         .success()
         .stdout(predicate::str::contains("blue"));
+}
+
+#[test]
+fn test_config_set_header_stream() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::create_dir_all(temp_dir.path().join(".shnote")).unwrap();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "set", "header_stream", "stderr"])
+        .assert()
+        .success();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "get", "header_stream"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("stderr"));
+}
+
+#[test]
+fn test_config_set_invalid_header_stream() {
+    shnote_cmd()
+        .args(["config", "set", "header_stream", "invalid"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid"));
+}
+
+#[test]
+fn test_config_set_header_timing() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::create_dir_all(temp_dir.path().join(".shnote")).unwrap();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "set", "header_timing", "both"])
+        .assert()
+        .success();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "get", "header_timing"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("both"));
+}
+
+#[test]
+fn test_config_set_invalid_header_timing() {
+    shnote_cmd()
+        .args(["config", "set", "header_timing", "invalid"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid"));
+}
+
+#[test]
+fn test_config_set_run_string_shell_mode() {
+    let temp_dir = TempDir::new().unwrap();
+    fs::create_dir_all(temp_dir.path().join(".shnote")).unwrap();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "set", "run_string_shell_mode", "ilc"])
+        .assert()
+        .success();
+
+    shnote_cmd()
+        .env("HOME", temp_dir.path())
+        .args(["config", "get", "run_string_shell_mode"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ilc"));
+}
+
+#[test]
+fn test_config_set_invalid_run_string_shell_mode() {
+    shnote_cmd()
+        .args(["config", "set", "run_string_shell_mode", "invalid"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("invalid"));
 }
 
 #[test]
@@ -1227,5 +1511,5 @@ fn test_run_nonexistent_command_english() {
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("failed to execute"));
+        .stderr(predicate::str::contains("nonexistent_command_xyz"));
 }

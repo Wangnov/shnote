@@ -1,3 +1,4 @@
+use std::ffi::OsString;
 use std::io::{self, Read};
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
@@ -6,8 +7,9 @@ use anyhow::{Context, Result};
 use which::which;
 
 use crate::cli::{PassthroughArgs, RunArgs, ScriptArgs};
-use crate::config::Config;
+use crate::config::{Config, RunStringShellMode};
 use crate::i18n::I18n;
+use crate::shell::{detect_shell, ShellType};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ScriptType {
@@ -29,7 +31,12 @@ impl ScriptType {
 }
 
 /// Execute a command directly (run subcommand) - true passthrough
-pub fn exec_run(i18n: &I18n, _config: &Config, args: RunArgs) -> Result<ExitCode> {
+pub fn exec_run(i18n: &I18n, config: &Config, args: RunArgs) -> Result<ExitCode> {
+    // Single-string command goes through configured shell so operators like &&/; work.
+    if args.command.len() == 1 {
+        return exec_run_string_command(i18n, config, &args.command[0]);
+    }
+
     // `RunArgs.command` is `required = true` in clap, so it is always non-empty in CLI usage.
     let mut command = args.command;
     let program = command.remove(0);
@@ -45,6 +52,39 @@ pub fn exec_run(i18n: &I18n, _config: &Config, args: RunArgs) -> Result<ExitCode
     let status = cmd
         .status()
         .context(i18n.err_failed_to_execute(&program.to_string_lossy()))?;
+
+    Ok(exit_code_from_status(status))
+}
+
+fn exec_run_string_command(i18n: &I18n, config: &Config, command: &OsString) -> Result<ExitCode> {
+    let command_str = command.to_string_lossy().to_string();
+    let (shell_type, shell_path) = detect_shell(i18n, &config.paths.shell)?;
+
+    let mut cmd = Command::new(&shell_path);
+    match shell_type {
+        ShellType::Sh | ShellType::Bash | ShellType::Zsh => {
+            let mode_flag = match config.run_string_shell_mode() {
+                RunStringShellMode::Lc => "-lc",
+                RunStringShellMode::Ilc => "-ilc",
+            };
+            cmd.arg(mode_flag).arg(&command_str);
+        }
+        ShellType::Pwsh => {
+            // Keep behavior non-interactive on PowerShell; ilc is Unix-shell specific.
+            cmd.arg("-Command").arg(&command_str);
+        }
+        ShellType::Cmd => {
+            cmd.arg("/C").arg(&command_str);
+        }
+    }
+
+    cmd.stdin(Stdio::inherit());
+    cmd.stdout(Stdio::inherit());
+    cmd.stderr(Stdio::inherit());
+
+    let status = cmd
+        .status()
+        .context(i18n.err_failed_to_execute(&shell_path.display().to_string()))?;
 
     Ok(exit_code_from_status(status))
 }

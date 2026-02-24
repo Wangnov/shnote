@@ -23,6 +23,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub lang: Option<String>,
 
+    /// Header output stream: auto | stdout | stderr
+    #[arg(long, global = true, value_enum)]
+    pub header_stream: Option<HeaderStream>,
+
     #[command(subcommand)]
     pub command: Command,
 }
@@ -46,6 +50,10 @@ pub enum Command {
 
     /// Execute npx (Node.js package runner)
     Npx(PassthroughArgs),
+
+    /// External subcommand fallback (treated as `run`)
+    #[command(external_subcommand)]
+    External(Vec<OsString>),
 
     /// Manage configuration
     Config(ConfigArgs),
@@ -99,6 +107,7 @@ impl Command {
             Self::Pip(_) => Some("pip"),
             Self::Npm(_) => Some("npm"),
             Self::Npx(_) => Some("npx"),
+            Self::External(_) => Some("run"),
             Self::Config(_)
             | Self::Init(_)
             | Self::Setup
@@ -136,6 +145,16 @@ pub enum Shell {
     PowerShell,
     /// Elvish shell
     Elvish,
+}
+
+#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HeaderStream {
+    /// Auto-detect: stdout for TTY, stderr for pipes/redirection
+    Auto,
+    /// Always print WHAT/WHY to stdout
+    Stdout,
+    /// Always print WHAT/WHY to stderr
+    Stderr,
 }
 
 #[derive(Args, Debug)]
@@ -187,7 +206,7 @@ pub struct ConfigArgs {
 pub enum ConfigAction {
     /// Get a configuration value
     Get {
-        /// Configuration key (e.g., python, node, shell, language, output, color, what_color, why_color)
+        /// Configuration key (e.g., python, node, shell, language, output, header_stream, header_timing, run_string_shell_mode, color, what_color, why_color)
         key: String,
     },
 
@@ -292,6 +311,9 @@ mod tests {
         });
         assert!(!config_cmd.requires_what_why());
 
+        let external_cmd = Command::External(vec![OsString::from("echo"), OsString::from("hi")]);
+        assert!(external_cmd.requires_what_why());
+
         let setup_cmd = Command::Setup;
         assert!(!setup_cmd.requires_what_why());
 
@@ -346,6 +368,7 @@ mod tests {
             what: None,
             why: None,
             lang: None,
+            header_stream: None,
             command: Command::Run(RunArgs {
                 command: vec![OsString::from("ls")],
             }),
@@ -362,6 +385,7 @@ mod tests {
             what: Some("test".to_string()),
             why: Some("testing".to_string()),
             lang: None,
+            header_stream: None,
             command: Command::Run(RunArgs {
                 command: vec![OsString::from("ls")],
             }),
@@ -376,6 +400,7 @@ mod tests {
             what: Some("test".to_string()),
             why: Some("testing".to_string()),
             lang: None,
+            header_stream: None,
             command: Command::Doctor,
         };
         assert!(validate_what_why(&i18n, &cli).is_err());

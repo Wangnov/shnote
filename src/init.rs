@@ -8,710 +8,62 @@ use which::which;
 use crate::cli::{InitTarget, Scope};
 use crate::config::home_dir;
 use crate::i18n::{I18n, Lang};
-use crate::pueue::pueue_available;
 
 /// Embedded shnote rules content (shared by all targets)
-const SHNOTE_RULES_BASE: &str = r#"# shnote - Shell Command Wrapper
-
-## 概述
-
-shnote 是一个命令包装器，强制在执行命令前填写 WHAT（做什么）和 WHY（为什么）。这有助于让用户能够快速直观地理解 AI Agent 临时编排的复杂命令。
-
-## 重要规则
-
-**当你需要执行任何 shell 命令时，必须使用 shnote 而不是直接使用内建的命令执行工具。**
-
-> 若后续“额外规则”与此处冲突，以额外规则为准（其优先级更高）。
-
-> 备注：`--what/--why` 只允许用于执行类子命令：`run`、`py`、`node`、`pip`、`npm`、`npx`。  
-> 对于 `config/init/setup/doctor/completions` 等管理命令，请直接运行 `shnote <subcommand>`（不要带 `--what/--why`），否则会报错。
-
-### 正确做法
-
-```bash
-# 使用 shnote 执行命令
-shnote --what "列出目录文件" --why "查看项目结构" run ls -la
-
-# 执行 Python 脚本
-shnote --what "运行测试脚本" --why "验证功能正确性" py -c 'print("test")'
-
-# 执行 Node.js 脚本
-shnote --what "处理 JSON 数据" --why "转换配置格式" node -c 'console.log(JSON.stringify({a:1}))'
-
-# 安装 Python 包
-shnote --what "安装请求库" --why "HTTP 请求需要" pip install requests
-
-# 安装 Node 包
-shnote --what "安装 axios" --why "HTTP 客户端需要" npm install axios
-```
-
-### 错误做法
-
-```bash
-# 不要直接执行命令
-ls -la  # 错误！
-
-# 不要省略 --what 和 --why
-shnote run ls -la  # 错误！缺少 --what 和 --why
-```
-
-## 命令格式
-
-### run - 执行任意 shell 命令
-
-```bash
-shnote --what "<做什么>" --why "<为什么>" run <command> [args...]
-```
-
-### py - 执行 Python 脚本
-
-```bash
-# 内联代码
-shnote --what "<做什么>" --why "<为什么>" py -c '<code>'
-
-# 文件
-shnote --what "<做什么>" --why "<为什么>" py -f <script.py>
-
-# 从 stdin 读取
-shnote --what "<做什么>" --why "<为什么>" py --stdin <<'EOF'
-<多行代码>
-EOF
-```
-
-### node - 执行 Node.js 脚本
-
-```bash
-# 内联代码
-shnote --what "<做什么>" --why "<为什么>" node -c '<code>'
-
-# 文件
-shnote --what "<做什么>" --why "<为什么>" node -f <script.js>
-```
-
-### 内联代码注意事项
-
-在使用 `py -c` 或 `node -c` 执行内联代码时，需要注意引号和转义问题：
-
-**Python f-string 限制**：f-string 表达式内不能包含反斜杠
-
-```bash
-# 错误：f-string 内有反斜杠会报语法错误
-shnote --what "<做什么>" --why "<为什么>" py -c 'print(f"时间: {datetime.now().strftime(\"%Y-%m-%d\")}")'
-
-# 正确：先将格式字符串赋值给变量
-shnote --what "<做什么>" --why "<为什么>" py -c 'from datetime import datetime; fmt="%Y-%m-%d"; print(f"时间: {datetime.now().strftime(fmt)}")'
-```
-
-**引号嵌套**：外层用单引号时，内层用双引号（或反之）
-
-```bash
-# 正确：外单内双
-shnote --what "<做什么>" --why "<为什么>" py -c 'print("Hello World")'
-shnote --what "<做什么>" --why "<为什么>" node -c 'console.log("Hello World")'
-
-# 正确：外双内单（需要转义外层引号）
-shnote --what "<做什么>" --why "<为什么>" py -c "print('Hello World')"
-```
-
-### pip - Python 包管理
-
-使用配置的 Python 环境对应的 pip（内部通过 `python -m pip` 实现）。
-
-```bash
-# 安装包
-shnote --what "安装 requests" --why "HTTP 请求需要" pip install requests
-
-# 查看已安装的包
-shnote --what "查看包列表" --why "检查依赖" pip list
-
-# 卸载包
-shnote --what "卸载旧版本" --why "版本冲突" pip uninstall package-name
-```
-
-### npm - Node.js 包管理
-
-使用与配置的 node 同目录的 npm。
-
-```bash
-# 安装包
-shnote --what "安装依赖" --why "项目初始化" npm install
-
-# 安装特定包
-shnote --what "安装 axios" --why "HTTP 客户端" npm install axios
-
-# 运行脚本
-shnote --what "运行构建" --why "打包发布" npm run build
-```
-
-### npx - Node.js 包执行器
-
-使用与配置的 node 同目录的 npx。
-
-```bash
-# 执行一次性命令
-shnote --what "创建 React 应用" --why "初始化新项目" npx create-react-app my-app
-
-# 运行本地包
-shnote --what "运行 eslint" --why "代码检查" npx eslint src/
-```
-
-## 推荐：使用 uv 避免污染系统环境
-
-如果用户安装了 [uv](https://github.com/astral-sh/uv)，**强烈建议**使用 `uv run` 或 `uvx` 来执行 Python 脚本和工具，而不是用 `pip` 安装到系统环境。
-
-### uv 的优势
-
-- 自动管理临时虚拟环境，不污染系统 pip
-- 包只下载一次，通过符号链接复用
-- 支持 PEP 723 内联依赖声明
-- 安装速度极快
-
-### 使用 uv run 执行带依赖的脚本
-
-```bash
-# 使用 --with 指定依赖（推荐）
-# 注意：某些包可能有隐式依赖，如 qrcode 保存图片需要 pillow
-shnote --what "生成二维码" --why "创建分享链接" run uv run --with qrcode --with pillow python -c "import qrcode; qrcode.make('hello').save('qr.png')"
-
-# 多个依赖用多个 --with
-shnote --what "数据处理" --why "分析CSV文件" run uv run --with pandas --with numpy python script.py
-
-# 执行带 PEP 723 内联依赖的脚本文件
-shnote --what "运行数据分析" --why "生成报告" run uv run analysis.py
-```
-
-PEP 723 内联依赖示例（script.py）:
-```python
-# /// script
-# dependencies = ["requests", "pandas"]
-# ///
-import requests
-import pandas as pd
-# ...
-```
-
-### 使用 uvx 执行一次性工具
-
-`uvx` 相当于 `uv tool run`，用于执行一次性 Python CLI 工具：
-
-```bash
-# 运行 black 格式化代码
-shnote --what "格式化代码" --why "统一代码风格" run uvx black src/
-
-# 运行 ruff 检查代码
-shnote --what "检查代码" --why "发现潜在问题" run uvx ruff check .
-
-# 运行 httpie 发送请求
-shnote --what "测试 API" --why "验证接口" run uvx httpie GET https://api.example.com/users
-```
-
-### 何时使用 pip vs uv
-
-| 场景 | 推荐方式 |
-|------|----------|
-| 一次性脚本需要依赖 | `uv run --with pkg` |
-| 一次性 CLI 工具 | `uvx tool-name` |
-| 项目开发，需要持久安装 | `pip install` |
-| 没有安装 uv | `pip install` |
-
-## --what 和 --why 的编写规范
-
-### --what（做什么）
-
-- 简洁描述这个命令的目的
-- 使用动词开头
-- 例如："列出目录文件"、"编译项目"、"运行测试"
-
-### --why（为什么）
-
-- 解释执行这个命令的原因
-- 提供上下文信息
-- 例如："查看项目结构"、"准备发布版本"、"验证修复是否生效"
-
-## 不需要使用 shnote 的情况
-
-以下命令可以直接使用对应工具执行，不需要通过 shnote：
+const SHNOTE_RULES_BASE: &str = r#"# 运行 shell 命令必须使用 shnote 包装
+
+shnote 用于在执行 shell 命令前补充 WHAT/WHY，帮助用户理解命令意图。
+
+## 核心约束
+
+1. 执行类子命令（`run` / `py` / `node` / `pip` / `npm` / `npx`）使用：
+   `shnote --what "<做什么>" --why "<为什么>" <subcommand> ...`
+2. WHAT 写动作，WHY 写原因，保持简短、具体。
+3. 默认 `header_stream=auto`：`stdout` 作为数据通道，`stderr` 作为说明通道。
+4. 若命令包含管道、重定向、逻辑连接或分号（如 `|`、`|&`、`>`、`>>`、`<`、`2>&1`、`&&`、`||`、`;`），请把整段命令放在同一对引号中，作为 shnote 的一个参数传入（可用双引号；需要避免变量展开时可用单引号）。
+5. 以下场景可能受 WHAT/WHY 影响，需要额外处理 `stderr`：
+   - 合并双流（如 `2>&1`、`|&`）
+   - 把 `stderr` 非空当作失败信号
+   - 直接解析整段终端日志（未区分 stdout/stderr）
+
+## 不需要通过 shnote 的操作
 
 {{NON_SHNOTE_TOOLS}}
-
-{{PUEUE_SECTION}}
-
-## 示例场景
-
-### 场景 1：查看系统信息
-
-```bash
-shnote --what "查看系统信息" --why "诊断环境问题" run uname -a
-```
-
-### 场景 2：启动服务（后台运行）
-
-```bash
-shnote --what "启动开发服务器" --why "本地测试新功能" run pueue add -- npm run dev
-```
-
-### 场景 3：数据处理（使用 uv）
-
-```bash
-# 推荐：使用 uv run，不污染系统环境
-shnote --what "分析日志" --why "统计错误" run uv run --with pandas python -c 'import pandas as pd; print(pd.read_csv("log.csv")["error"].sum())'
-```
-
-### 场景 4：一次性工具（使用 uvx）
-
-```bash
-# 推荐：使用 uvx 运行一次性工具
-shnote --what "格式化 JSON" --why "美化配置文件" run uvx python-json-tool < config.json
-```
-
-### 场景 5：项目依赖安装
-
-```bash
-# 项目开发场景，需要持久安装
-shnote --what "安装项目依赖" --why "开发环境初始化" pip install -r requirements.txt
-```
-
-### 场景 6：批量操作
-
-```bash
-shnote --what "批量重命名文件" --why "统一文件命名规范" run find . -name "*.txt" -exec mv {} {}.bak \;
-```
-
-## 输出格式
-
-shnote 会在命令输出前显示 WHAT 和 WHY：
-
-```
-WHAT: 列出目录文件
-WHY:  查看项目结构
-file1.txt
-file2.txt
-...
-```
-
-> 注意：如果你在 `shnote ...` 外层再接管道/过滤（例如 `| tail -5`、`| head -20`、`| grep ...`），这些工具可能会截断/过滤掉前两行，从而导致输出里看不到 `WHAT/WHY`。
-> 这不影响 `shnote` 的强制记录：请以实际执行命令里的 `--what` / `--why` 参数为准（它们必须写在子命令前，通常在终端/日志里总能看到）。
-
-这使得 AI Agent 可以轻松追踪每个命令的意图和执行结果。
 "#;
 
-const SHNOTE_RULES_BASE_EN: &str = r#"# shnote - Shell Command Wrapper
-
-## Overview
-
-shnote is a command wrapper that forces WHAT (what the command does) and WHY (why it is needed) before execution. This helps users quickly understand complex commands composed by AI Agents.
-
-## Important Rules
-
-**When you need to execute any shell command, you must use shnote instead of the built-in command execution tool.**
-
-> If any later "extra rules" conflict with this section, the extra rules take precedence.
-
-> Note: `--what/--why` are only allowed for execution subcommands: `run`, `py`, `node`, `pip`, `npm`, `npx`.  
-> For management commands like `config/init/setup/doctor/completions`, run `shnote <subcommand>` directly (do NOT add `--what/--why`), or it will error.
-
-### Correct Usage
-
-```bash
-# Use shnote to execute commands
-shnote --what "List files" --why "Inspect project structure" run ls -la
-
-# Run Python scripts
-shnote --what "Run test script" --why "Verify functionality" py -c 'print("test")'
-
-# Run Node.js scripts
-shnote --what "Process JSON" --why "Transform config format" node -c 'console.log(JSON.stringify({a:1}))'
-
-# Install Python packages
-shnote --what "Install requests" --why "Need HTTP client" pip install requests
-
-# Install Node packages
-shnote --what "Install axios" --why "Need HTTP client" npm install axios
-```
-
-### Incorrect Usage
-
-```bash
-# Do NOT run commands directly
-ls -la  # wrong!
-
-# Do NOT omit --what and --why
-shnote run ls -la  # wrong! missing --what and --why
-```
-
-## Command Formats
-
-### run - Execute any shell command
-
-```bash
-shnote --what "<what>" --why "<why>" run <command> [args...]
-```
-
-### py - Execute Python scripts
-
-```bash
-# Inline code
-shnote --what "<what>" --why "<why>" py -c '<code>'
-
-# File
-shnote --what "<what>" --why "<why>" py -f <script.py>
-
-# Read from stdin
-shnote --what "<what>" --why "<why>" py --stdin <<'EOF'
-<multi-line code>
-EOF
-```
-
-### node - Execute Node.js scripts
-
-```bash
-# Inline code
-shnote --what "<what>" --why "<why>" node -c '<code>'
-
-# File
-shnote --what "<what>" --why "<why>" node -f <script.js>
-```
-
-### Inline Code Notes
-
-**Python f-string limitation**: f-string expressions cannot contain backslashes
-
-```bash
-# Wrong: backslash in f-string expression
-shnote --what "<what>" --why "<why>" py -c 'print(f"Time: {datetime.now().strftime(\"%Y-%m-%d\")}")'
-
-# Correct: assign format string to a variable first
-shnote --what "<what>" --why "<why>" py -c 'from datetime import datetime; fmt="%Y-%m-%d"; print(f"Time: {datetime.now().strftime(fmt)}")'
-```
-
-**Quote nesting**: use single quotes outside and double quotes inside (or vice versa)
-
-```bash
-# Correct: single outside, double inside
-shnote --what "<what>" --why "<why>" py -c 'print("Hello World")'
-shnote --what "<what>" --why "<why>" node -c 'console.log("Hello World")'
-
-# Correct: double outside, single inside (escape outer quotes)
-shnote --what "<what>" --why "<why>" py -c "print('Hello World')"
-```
-
-### pip - Python package manager
-
-Uses the configured Python environment's pip (internally via `python -m pip`).
-
-```bash
-# Install packages
-shnote --what "Install requests" --why "Need HTTP client" pip install requests
-
-# List installed packages
-shnote --what "List packages" --why "Check dependencies" pip list
-
-# Uninstall a package
-shnote --what "Remove old version" --why "Resolve conflicts" pip uninstall package-name
-```
-
-### npm - Node.js package manager
-
-Uses npm next to the configured node.
-
-```bash
-# Install dependencies
-shnote --what "Install deps" --why "Initialize project" npm install
-
-# Install a specific package
-shnote --what "Install axios" --why "Need HTTP client" npm install axios
-
-# Run a script
-shnote --what "Run build" --why "Prepare release" npm run build
-```
-
-### npx - Node.js package runner
-
-Uses npx next to the configured node.
-
-```bash
-# Run a one-off command
-shnote --what "Create React app" --why "Bootstrap project" npx create-react-app my-app
-
-# Run a local package
-shnote --what "Run eslint" --why "Lint code" npx eslint src/
-```
-
-## Recommended: use uv to avoid polluting system Python
-
-If you have [uv](https://github.com/astral-sh/uv), **strongly** prefer `uv run` or `uvx` for scripts and tools instead of installing to system pip.
-
-### Why uv?
-
-- Automatically manages ephemeral venvs without polluting system pip
-- Packages are downloaded once and reused via symlinks
-- Supports PEP 723 inline dependency declarations
-- Very fast installs
-
-### Use uv run with dependencies
-
-```bash
-# Use --with to specify deps (recommended)
-# Note: some packages have implicit deps (e.g., qrcode requires pillow)
-shnote --what "Generate QR code" --why "Create share link" run uv run --with qrcode --with pillow python -c "import qrcode; qrcode.make('hello').save('qr.png')"
-
-# Multiple deps: repeat --with
-shnote --what "Process data" --why "Analyze CSV" run uv run --with pandas --with numpy python script.py
-
-# Run a script with PEP 723 inline dependencies
-shnote --what "Run analysis" --why "Generate report" run uv run analysis.py
-```
-
-PEP 723 inline deps example (script.py):
-```python
-# /// script
-# dependencies = ["requests", "pandas"]
-# ///
-import requests
-import pandas as pd
-# ...
-```
-
-### Use uvx for one-off tools
-
-`uvx` is like `uv tool run`, for one-off CLI tools:
-
-```bash
-# Run black formatter
-shnote --what "Format code" --why "Unify style" run uvx black src/
-
-# Run ruff linter
-shnote --what "Lint code" --why "Find issues" run uvx ruff check .
-
-# Use httpie
-shnote --what "Test API" --why "Verify endpoint" run uvx httpie GET https://api.example.com/users
-```
-
-### When to use pip vs uv
-
-| Scenario | Recommended |
-|----------|-------------|
-| One-off script with deps | `uv run --with pkg` |
-| One-off CLI tool | `uvx tool-name` |
-| Project dev with persistent deps | `pip install` |
-| uv not installed | `pip install` |
-
-## How to write --what / --why
-
-### --what
-
-- Concise description of what the command does
-- Start with a verb
-- Examples: "List files", "Build project", "Run tests"
-
-### --why
-
-- Explain why the command is needed
-- Provide context
-- Examples: "Inspect project structure", "Prepare release", "Verify fix"
-
-## When NOT to use shnote
-
-The following operations can use the corresponding tool directly and do not need shnote:
+const SHNOTE_RULES_BASE_EN: &str = r#"# Wrap shell commands with shnote
+
+shnote adds WHAT/WHY before shell execution so users can quickly understand intent.
+
+## Core Constraints
+
+1. For execution subcommands (`run` / `py` / `node` / `pip` / `npm` / `npx`), use:
+   `shnote --what "<what>" --why "<why>" <subcommand> ...`
+2. Keep WHAT action-focused and WHY context-focused; both should be concise.
+3. Default `header_stream=auto`: treat `stdout` as data channel and `stderr` as annotation channel.
+4. If a command uses pipes/redirection/operators (for example `|`, `|&`, `>`, `>>`, `<`, `2>&1`, `&&`, `||`, `;`), pass the whole command as one quoted string argument to shnote (double quotes are preferred; use single quotes when you need to suppress variable expansion).
+5. WHAT/WHY may still affect downstream handling in these cases; split/filter `stderr` as needed:
+   - Merging both streams (`2>&1`, `|&`)
+   - Systems treating any non-empty `stderr` as failure
+   - Parsers that consume raw terminal logs without stream separation
+
+## Operations that do not need shnote
 
 {{NON_SHNOTE_TOOLS}}
-
-{{PUEUE_SECTION}}
-
-## Example Scenarios
-
-### Scenario 1: System info
-
-```bash
-shnote --what "Show system info" --why "Diagnose environment" run uname -a
-```
-
-### Scenario 2: Start a service (background)
-
-```bash
-shnote --what "Start dev server" --why "Test feature locally" run pueue add -- npm run dev
-```
-
-### Scenario 3: Data processing (uv)
-
-```bash
-# Recommended: use uv run to avoid polluting system env
-shnote --what "Analyze logs" --why "Count errors" run uv run --with pandas python -c 'import pandas as pd; print(pd.read_csv("log.csv")["error"].sum())'
-```
-
-### Scenario 4: One-off tool (uvx)
-
-```bash
-# Recommended: use uvx for one-off tools
-shnote --what "Format JSON" --why "Pretty-print config" run uvx python-json-tool < config.json
-```
-
-### Scenario 5: Install project deps
-
-```bash
-shnote --what "Install deps" --why "Initialize dev env" pip install -r requirements.txt
-```
-
-### Scenario 6: Batch operations
-
-```bash
-shnote --what "Batch rename files" --why "Standardize naming" run find . -name "*.txt" -exec mv {} {}.bak \;
-```
-
-## Output Format
-
-shnote prints WHAT and WHY before the command output:
-
-```
-WHAT: List files
-WHY:  Inspect project structure
-<actual command output...>
-```
-
-> Note: If you pipe/filter shnote output (e.g., `| tail -5`, `| head -20`, `| grep ...`), those tools may drop the first two lines, so WHAT/WHY might not appear in the final output.
-> This does not affect shnote's enforcement: `--what/--why` must appear before the subcommand, and they are still recorded in the actual command.
-
-This makes it easy to trace the intent and result of commands orchestrated by the AI Agent.
-"#;
-
-const SHNOTE_RULES_PUEUE_ZH: &str = r#"## 长时间运行的命令（使用 pueue）
-
-对于**长时间运行**或**持续运行**的命令，必须通过 pueue 放到后台执行，避免阻塞 Agent。
-
-> 如果环境里没有 `pueue/pueued`，可以先运行 `shnote setup`（会安装到 shnote 的 bin 目录，通常为 `~/.shnote/bin`，并提示如何加入 PATH），或自行安装 pueue。
-
-### 需要使用 pueue 的场景
-
-- 启动开发服务器（`npm run dev`、`python -m http.server`、`cargo run` 等）
-- 文件监听/热重载（`npm run watch`、`tsc --watch` 等）
-- 长时间编译任务
-- 任何预期运行时间超过几秒或持续运行的命令
-
-### pueue 使用格式
-
-```bash
-# 添加后台任务
-shnote --what "<做什么>" --why "<为什么>" run pueue add -- <command> [args...]
-
-# 查看所有任务状态
-shnote --what "查看后台任务" --why "检查服务运行状态" run pueue status
-
-# 查看特定任务日志（注意：pueue status 不接受任务 ID）
-shnote --what "查看任务日志" --why "调试服务问题" run pueue log <task_id>
-
-# 停止任务
-shnote --what "停止后台任务" --why "关闭服务" run pueue kill <task_id>
-```
-
-### pueue 注意事项
-
-**复杂命令的限制**：pueue 对命令的引号处理比较敏感，以下情况建议写成脚本文件：
-
-| 问题场景 | 解决方案 |
-|----------|----------|
-| 多行命令 | 写成脚本文件再运行 |
-| 引号嵌套（如 f-string） | 写成脚本文件再运行 |
-| `python` 命令找不到 | 使用完整路径 `/usr/bin/python3` |
-
-```bash
-# 错误示例：复杂引号嵌套可能失败
-pueue add -- python -c 'print(f"value: {x}")'
-
-# 正确做法：先写脚本文件
-echo 'print(f"value: {x}")' > /tmp/script.py
-shnote --what "运行后台脚本" --why "避免引号问题" run pueue add -- /usr/bin/python3 /tmp/script.py
-```
-"#;
-
-const SHNOTE_RULES_PUEUE_EN: &str = r#"## Long-running commands (use pueue)
-
-For **long-running** or **continuous** commands, you must run them via pueue in the background to avoid blocking the Agent.
-
-> If `pueue/pueued` is not available, run `shnote setup` to install them to shnote's bin directory (usually `~/.shnote/bin`) and add it to PATH, or install pueue manually.
-
-### When to use pueue
-
-- Start dev servers (`npm run dev`, `python -m http.server`, `cargo run`, etc.)
-- File watchers / hot reload (`npm run watch`, `tsc --watch`, etc.)
-- Long compile jobs
-- Any command expected to run more than a few seconds or continuously
-
-### pueue usage
-
-```bash
-# Add background task
-shnote --what "<what>" --why "<why>" run pueue add -- <command> [args...]
-
-# List tasks
-shnote --what "List tasks" --why "Check service status" run pueue status
-
-# View task logs (note: pueue status does not take task ID)
-shnote --what "View task logs" --why "Debug service" run pueue log <task_id>
-
-# Stop task
-shnote --what "Stop task" --why "Shut down service" run pueue kill <task_id>
-```
-
-### pueue caveats
-
-**Complex command limitations**: pueue is sensitive to quoting. For these cases, prefer a script file:
-
-| Problem | Solution |
-|---------|----------|
-| Multi-line commands | Write a script file and run it |
-| Quote nesting (e.g., f-string) | Write a script file |
-| `python` not found | Use full path `/usr/bin/python3` |
-
-```bash
-# Wrong: complex quoting may fail
-pueue add -- python -c 'print(f"value: {x}")'
-
-# Correct: write a script file first
-echo 'print(f"value: {x}")' > /tmp/script.py
-shnote --what "Run background script" --why "Avoid quoting issues" run pueue add -- /usr/bin/python3 /tmp/script.py
-```
 "#;
 
 /// Codex-specific additions to the shnote rules (ZH)
 const SHNOTE_RULES_CODEX_EXTRA: &str = r#"## Codex 额外规则
 
-### 规则优先级
-以下 Codex 额外规则 **优先级高于** 基础规则，若有冲突以此为准。
-
-### 文件只读展示：必须直接用 shell（不使用 shnote）
-出于 Codex CLI 展示层渲染效果，**读取/预览文件内容时不要使用 shnote**，直接执行以下命令或其管道组合：
-
-- cat file.txt
-- head -n 50 file.txt
-- tail -n 30 file.txt
-- sed -n '1,200p' file.txt
-- cat file.txt | sed -n '1,200p'
-- nl -ba file.txt
-
-只读展示指：不改变任何文件/系统状态、仅输出到终端的命令。
-
-编辑文件时默认使用 **apply_patch**（或内建编辑工具）；读取/预览请遵循上面的直接 shell 规则，不要用 shnote。
+1. 只读查看文件内容时，直接用 shell（如 `cat` / `head` / `tail` / `sed` / `nl` / `rg`），不使用 shnote。
+2. 编辑文件优先使用 `apply_patch`（或内建编辑工具）。
 "#;
 
 /// Codex-specific additions to the shnote rules (EN)
 const SHNOTE_RULES_CODEX_EXTRA_EN: &str = r#"## Codex Extra Rules
 
-### Priority
-These Codex extra rules **override** the base rules if there is any conflict.
-
-### Read-only file display: must use direct shell (no shnote)
-For Codex CLI rendering, **do NOT use shnote** when you only need to read/preview file contents. Run these commands (or their pipelines) directly:
-
-- cat file.txt
-- head -n 50 file.txt
-- tail -n 30 file.txt
-- sed -n '1,200p' file.txt
-- cat file.txt | sed -n '1,200p'
-- nl -ba file.txt
-
-Read-only means no filesystem/system state changes, only output to the terminal.
-
-For edits, default to **apply_patch** (or built-in edit tools). For read/preview, follow the direct shell rule above (no shnote).
+1. For read-only file display, use direct shell (`cat` / `head` / `tail` / `sed` / `nl` / `rg`) without shnote.
+2. For edits, prefer `apply_patch` (or built-in edit tools).
 "#;
 
 /// Claude-specific additions to the shnote rules (ZH)
@@ -744,19 +96,12 @@ pub(crate) const SHNOTE_MARKER_END: &str = "\n<!-- shnote rules end -->\n";
 
 fn non_shnote_tools_for_target(lang: Lang, target: InitTarget) -> &'static str {
     match (lang, target) {
-        (Lang::Zh, InitTarget::Codex) => "1. **文件只读展示**：直接用 shell 命令读取/预览文件内容（不要用 shnote），如 `cat` / `head` / `tail` / `sed -n` / `nl -ba` 及其管道组合（如 `cat file | sed -n '1,200p'`）。\n2. **Agent 自身的操作**：如读取文件（使用 functions.read_file 工具）、列出目录内容（使用 functions.list_dir 工具）、编辑文件等（使用 functions.apply_patch 工具）。",
-        (Lang::En, InitTarget::Codex) => "1. **Read-only file display**: use direct shell commands to view file contents (do NOT use shnote), e.g. `cat` / `head` / `tail` / `sed -n` / `nl -ba` and their pipelines (e.g. `cat file | sed -n '1,200p'`).\n2. **Agent self-operations**: read files (functions.read_file), list directories (functions.list_dir), edit files (functions.apply_patch).",
+        (Lang::Zh, InitTarget::Codex) => "1. **只读查看文件**：直接用 shell，不通过 shnote。\n2. **非 shell 的内建工具**（读文件、列目录、编辑文件等）不通过 shnote。",
+        (Lang::En, InitTarget::Codex) => "1. **Read-only file viewing**: use direct shell, not shnote.\n2. **Non-shell built-in tools** (read/list/edit operations) do not need shnote.",
         (Lang::Zh, InitTarget::Claude) => "1. **仅 Bash 工具必须使用 shnote**：Read / Write / Edit 等工具不使用 shnote。",
-        (Lang::En, InitTarget::Claude) => "1. **Only the Bash tool must use shnote**: Read / Write / Edit tools must not use shnote.",
+        (Lang::En, InitTarget::Claude) => "1. **Only the Bash tool must use shnote**: Read / Write / Edit tools do not use shnote.",
         (Lang::Zh, InitTarget::Gemini) => "1. **仅 run_shell_command 需要使用 shnote**：list_directory / read_file / write_file / replace 等工具不使用 shnote。",
-        (Lang::En, InitTarget::Gemini) => "1. **Only run_shell_command uses shnote**: list_directory / read_file / write_file / replace tools must not use shnote.",
-    }
-}
-
-fn pueue_section_for_lang(lang: Lang) -> &'static str {
-    match lang {
-        Lang::Zh => SHNOTE_RULES_PUEUE_ZH,
-        Lang::En => SHNOTE_RULES_PUEUE_EN,
+        (Lang::En, InitTarget::Gemini) => "1. **Only run_shell_command needs shnote**: list_directory / read_file / write_file / replace do not use shnote.",
     }
 }
 
@@ -774,7 +119,7 @@ fn extra_rules_for_target(lang: Lang, target: InitTarget) -> Option<&'static str
 pub(crate) fn rules_for_target_with_pueue(
     i18n: &I18n,
     target: InitTarget,
-    include_pueue: bool,
+    _include_pueue: bool,
 ) -> String {
     let template = match i18n.lang() {
         Lang::Zh => SHNOTE_RULES_BASE,
@@ -784,12 +129,6 @@ pub(crate) fn rules_for_target_with_pueue(
         "{{NON_SHNOTE_TOOLS}}",
         non_shnote_tools_for_target(i18n.lang(), target),
     );
-    let pueue_section = if include_pueue {
-        pueue_section_for_lang(i18n.lang())
-    } else {
-        ""
-    };
-    rules = rules.replace("{{PUEUE_SECTION}}", pueue_section);
     if let Some(extra) = extra_rules_for_target(i18n.lang(), target) {
         rules.push_str("\n\n");
         rules.push_str(extra);
@@ -798,7 +137,7 @@ pub(crate) fn rules_for_target_with_pueue(
 }
 
 fn rules_for_target(i18n: &I18n, target: InitTarget) -> String {
-    rules_for_target_with_pueue(i18n, target, pueue_available())
+    rules_for_target_with_pueue(i18n, target, false)
 }
 
 pub fn run_init(i18n: &I18n, target: InitTarget, scope: Scope) -> Result<()> {
@@ -1119,7 +458,6 @@ fn parse_semver_from_text(text: &str) -> Option<SemVer> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{pueue_binary_name, pueued_binary_name, shnote_bin_dir};
     use crate::i18n::Lang;
     #[cfg(unix)]
     use crate::test_support::write_executable;
@@ -1140,8 +478,10 @@ mod tests {
         assert!(SHNOTE_RULES_BASE_EN.contains("--what"));
         assert!(SHNOTE_RULES_BASE.contains("--why"));
         assert!(SHNOTE_RULES_BASE_EN.contains("--why"));
-        assert!(SHNOTE_RULES_BASE.len() > 1000); // Rules should be substantial
-        assert!(SHNOTE_RULES_BASE_EN.len() > 1000);
+        assert!(SHNOTE_RULES_BASE.contains("header_stream=auto"));
+        assert!(SHNOTE_RULES_BASE_EN.contains("header_stream=auto"));
+        assert!(SHNOTE_RULES_BASE.len() > 200);
+        assert!(SHNOTE_RULES_BASE_EN.len() > 200);
     }
 
     #[test]
@@ -1153,33 +493,16 @@ mod tests {
     }
 
     #[test]
-    fn rules_include_pueue_section_when_available() {
-        let _lock = env_lock();
-
-        let temp_dir = TempDir::new().unwrap();
-        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
-        let _path_guard = EnvVarGuard::set("PATH", temp_dir.path());
-
-        let bin_dir = shnote_bin_dir().unwrap();
-        fs::create_dir_all(&bin_dir).unwrap();
-        fs::write(bin_dir.join(pueue_binary_name()), "stub").unwrap();
-        fs::write(bin_dir.join(pueued_binary_name()), "stub").unwrap();
-
+    fn rules_do_not_include_pueue_section_when_available() {
         let i18n = test_i18n();
-        let rules = rules_for_target(&i18n, InitTarget::Codex);
-        assert!(rules.contains("Long-running commands (use pueue)"));
+        let rules = rules_for_target_with_pueue(&i18n, InitTarget::Codex, true);
+        assert!(!rules.contains("Long-running commands (use pueue)"));
     }
 
     #[test]
-    fn rules_skip_pueue_section_when_missing() {
-        let _lock = env_lock();
-
-        let temp_dir = TempDir::new().unwrap();
-        let _home_guard = EnvVarGuard::set("HOME", temp_dir.path());
-        let _path_guard = EnvVarGuard::set("PATH", temp_dir.path());
-
+    fn rules_do_not_include_pueue_section_when_missing() {
         let i18n = test_i18n();
-        let rules = rules_for_target(&i18n, InitTarget::Codex);
+        let rules = rules_for_target_with_pueue(&i18n, InitTarget::Codex, false);
         assert!(!rules.contains("Long-running commands (use pueue)"));
     }
 

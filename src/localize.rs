@@ -70,7 +70,10 @@ fn localize_args(cmd: Command, cmd_name: &str, i18n: &I18n) -> Command {
         "shnote" => cmd
             .mut_arg("what", |arg| arg.help(i18n.help_arg_what()))
             .mut_arg("why", |arg| arg.help(i18n.help_arg_why()))
-            .mut_arg("lang", |arg| arg.help(i18n.help_arg_lang())),
+            .mut_arg("lang", |arg| arg.help(i18n.help_arg_lang()))
+            .mut_arg("header_stream", |arg| {
+                arg.help(i18n.help_arg_header_stream())
+            }),
         "run" => cmd.mut_arg("command", |arg| arg.help(i18n.help_arg_command())),
         "py" | "node" => cmd
             .mut_arg("code", |arg| arg.help(i18n.help_arg_code()))
@@ -130,6 +133,7 @@ mod tests {
         assert!(help.contains("这个任务做什么"));
         assert!(help.contains("为什么执行这个任务"));
         assert!(help.contains("消息语言"));
+        assert!(help.contains("头信息输出流"));
     }
 
     #[test]

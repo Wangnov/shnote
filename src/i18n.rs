@@ -261,6 +261,27 @@ impl I18n {
         }
     }
 
+    pub fn err_invalid_header_stream_value(&self, value: &str, valid: &str) -> String {
+        match self.lang {
+            Lang::En => format!("invalid header stream value: {value}. Valid options: {valid}"),
+            Lang::Zh => format!("无效的头信息输出流：{value}。有效选项：{valid}"),
+        }
+    }
+
+    pub fn err_invalid_header_timing_value(&self, value: &str, valid: &str) -> String {
+        match self.lang {
+            Lang::En => format!("invalid header timing value: {value}. Valid options: {valid}"),
+            Lang::Zh => format!("无效的头信息输出时机：{value}。有效选项：{valid}"),
+        }
+    }
+
+    pub fn err_invalid_run_string_shell_mode_value(&self, value: &str, valid: &str) -> String {
+        match self.lang {
+            Lang::En => format!("invalid run string shell mode: {value}. Valid options: {valid}"),
+            Lang::Zh => format!("无效的字符串执行模式：{value}。有效选项：{valid}"),
+        }
+    }
+
     pub fn err_invalid_color_value(&self, value: &str, valid: &str) -> String {
         match self.lang {
             Lang::En => format!("invalid color value: {value}. Valid options: {valid}"),
@@ -507,6 +528,13 @@ impl I18n {
         }
     }
 
+    pub fn help_arg_header_stream(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "Header output stream: auto|stdout|stderr",
+            Lang::Zh => "头信息输出流：auto|stdout|stderr",
+        }
+    }
+
     // Subcommands
     pub fn help_cmd_run(&self) -> &'static str {
         match self.lang {
@@ -552,8 +580,8 @@ impl I18n {
 
     pub fn help_cmd_config(&self) -> &'static str {
         match self.lang {
-            Lang::En => "Manage configuration\n\nAvailable keys and suggested values:\n  python     - Python interpreter path (e.g., python3, /usr/bin/python3)\n  node       - Node.js interpreter path (e.g., node, /usr/local/bin/node)\n  shell      - auto|sh|bash|zsh|pwsh|cmd\n  language   - auto|zh|en\n  output     - default|quiet\n  color      - true|false\n  what_color - default|black|red|green|yellow|blue|magenta|cyan|white|bright_black|bright_red|bright_green|bright_yellow|bright_blue|bright_magenta|bright_cyan|bright_white\n  why_color  - same as what_color",
-            Lang::Zh => "管理配置\n\n可配置项与建议值：\n  python     - Python 解释器路径（例：python3，/usr/bin/python3）\n  node       - Node.js 解释器路径（例：node，/usr/local/bin/node）\n  shell      - auto|sh|bash|zsh|pwsh|cmd\n  language   - auto|zh|en\n  output     - default|quiet\n  color      - true|false\n  what_color - default|black|red|green|yellow|blue|magenta|cyan|white|bright_black|bright_red|bright_green|bright_yellow|bright_blue|bright_magenta|bright_cyan|bright_white\n  why_color  - 同 what_color",
+            Lang::En => "Manage configuration\n\nAvailable keys and suggested values:\n  python                - Python interpreter path (e.g., python3, /usr/bin/python3)\n  node                  - Node.js interpreter path (e.g., node, /usr/local/bin/node)\n  shell                 - auto|sh|bash|zsh|pwsh|cmd\n  language              - auto|zh|en\n  output                - default|quiet\n  header_stream         - auto|stdout|stderr\n  header_timing         - head|tail|both\n  run_string_shell_mode - lc|ilc (single-string run mode)\n  color                 - true|false\n  what_color            - default|black|red|green|yellow|blue|magenta|cyan|white|bright_black|bright_red|bright_green|bright_yellow|bright_blue|bright_magenta|bright_cyan|bright_white\n  why_color             - same as what_color",
+            Lang::Zh => "管理配置\n\n可配置项与建议值：\n  python                - Python 解释器路径（例：python3，/usr/bin/python3）\n  node                  - Node.js 解释器路径（例：node，/usr/local/bin/node）\n  shell                 - auto|sh|bash|zsh|pwsh|cmd\n  language              - auto|zh|en\n  output                - default|quiet\n  header_stream         - auto|stdout|stderr\n  header_timing         - head|tail|both\n  run_string_shell_mode - lc|ilc（单字符串命令执行模式）\n  color                 - true|false\n  what_color            - default|black|red|green|yellow|blue|magenta|cyan|white|bright_black|bright_red|bright_green|bright_yellow|bright_blue|bright_magenta|bright_cyan|bright_white\n  why_color             - 同 what_color",
         }
     }
 
@@ -1556,6 +1584,13 @@ mod tests {
 
         assert!(en.err_write_config("/tmp/c").contains("/tmp/c"));
         assert!(zh.err_write_config("/tmp/c").contains("/tmp/c"));
+
+        assert!(en
+            .err_invalid_header_timing_value("middle", "head, tail, both")
+            .contains("middle"));
+        assert!(zh
+            .err_invalid_header_timing_value("middle", "head, tail, both")
+            .contains("middle"));
 
         assert!(en
             .err_invalid_color_value("maybe", "true, false")
