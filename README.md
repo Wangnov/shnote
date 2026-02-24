@@ -10,7 +10,7 @@
   <a href="https://github.com/wangnov/shnote/releases"><img src="https://img.shields.io/github/v/release/wangnov/shnote" alt="Release"></a>
   <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
   <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey" alt="Platform">
-  <img src="https://img.shields.io/badge/rust-1.74%2B-orange" alt="Rust">
+  <img src="https://img.shields.io/badge/rust-stable-orange" alt="Rust">
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@
 ### 特性
 
 - **强制 WHAT/WHY**：对执行类命令（`run/py/node/pip/npm/npx`）要求在子命令前填写 `--what/--why`
-- **协议化输出**：`WHAT:` 和 `WHY:` 输出在最前面，便于解析
+- **协议化输出**：`WHAT:` 和 `WHY:` 结构化输出，默认在命令输出后（可配置）
 - **完全透传**：命令输出不做拦截/改写（stdout/stderr 继承），用户自己决定如何使用 pueue
 - **多命令支持**：shell、Python、Node.js，以及 `pip/npm/npx` 透传封装
 - **跨平台**：支持 macOS、Linux、Windows
@@ -58,13 +58,21 @@
 
 #### 1. 安装 shnote
 
-macOS / Linux:
+首选（macOS / Linux，推荐）:
 
 ```bash
 curl -fsSL https://shnote.agentsmirror.com/install.sh | sh
 ```
 
 默认安装目录为 `~/.local/bin`，安装器会自动检查 PATH；若未包含该目录，会自动写入你的 shell 配置文件。
+
+Windows (PowerShell):
+
+```powershell
+irm https://shnote.agentsmirror.com/install.ps1 | iex
+```
+
+其他推荐安装方式（按推荐顺序）:
 
 Homebrew (macOS):
 
@@ -73,53 +81,23 @@ brew tap wangnov/tap
 brew install shnote
 ```
 
-Windows (PowerShell):
+cargo-binstall（跨平台，下载预构建二进制）:
 
-```powershell
-irm https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.ps1 | iex
-```
-
-<details>
-<summary>🇨🇳 国内用户（使用 GitHub 代理加速）</summary>
-
-可用代理列表：https://ghproxylist.com/
-
-macOS / Linux:
-
-```bash
-curl -fsSL https://shnote.agentsmirror.com/install.sh | sh
-```
-
-Windows (PowerShell):
-
-```powershell
-irm https://ghfast.top/https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.ps1 | iex
-```
-
-</details>
-
-<details>
-<summary>从源码安装</summary>
-
-```bash
-cargo install --path .
-```
-
-</details>
-
-<details>
-<summary>通过 Cargo 安装（crates.io）</summary>
-
-```bash
-cargo install shnote
-```
-
-或通过 cargo-binstall 安装（`cargo install cargo-binstall`以安装cargo-binstall， 一个直接从github release 下载预构建的二进制的安装方式，避免本地构建占用时间）
 ```bash
 cargo binstall shnote
 ```
 
-</details>
+若未安装 `cargo-binstall`，先执行：
+
+```bash
+cargo install cargo-binstall
+```
+
+Cargo (crates.io，本地构建):
+
+```bash
+cargo install shnote
+```
 
 #### 2. 初始化 AI 工具（必需）
 
@@ -167,17 +145,14 @@ Skills 是 Claude Code 的另一种扩展机制，但 **Bash 工具的默认优�
 
 **为什么需要 pueue？**
 
-- **Gemini CLI**：没有内置的后台任务功能，长时间运行的命令会阻塞 AI，必须通过 pueue 放到后台
-- **Claude Code**：可以不使用 pueue，因为 Claude Code 有更好的设计（Background Bash 和 SubAgent，且提供了玩法多样的 Task Output ）
-- **Codex CLI**：可以不使用 pueue，因为 Claude Code 有更好的设计（Background Shell 和惊人的能直接通过 STDIN 与 Background Shell 交互的功能）
+- **Gemini CLI**：通常建议配合 pueue 跑后台长任务
+- **Claude Code / Codex CLI**：通常可直接使用各自的后台能力，pueue 可选
 
 安装 pueue：
 
 ```bash
 shnote setup
 
-# 国内用户可使用代理加速
-GITHUB_PROXY=https://ghfast.top shnote setup
 ```
 
 这会将 pueue 和 pueued 安装到 `~/.shnote/bin/`。按提示将此目录添加到 PATH：
@@ -188,7 +163,7 @@ export PATH="$HOME/.shnote/bin:$PATH"
 ```
 
 <details>
-<summary>📸 pueue 使用示例（Codex CLI）（已过时，目前仅推荐 Gemini CLI 使用 pueue）</summary>
+<summary>📸 pueue 使用示例（历史截图）</summary>
 
 <img src="assets/Chinese_pueue_codex.png" alt="pueue 使用示例" width="100%">
 
@@ -241,12 +216,18 @@ shnote --what "后台编译" --why "编译大项目" run pueue add -- cargo buil
 ### 输出格式
 
 ```
+<命令实际输出...>
 WHAT: 列出文件
 WHY:  查看项目结构
-<命令实际输出...>
 ```
 
-> 注意：如果你在 `shnote ...` 外层再接管道/过滤（例如 `| tail -5`、`| head -20`、`| grep ...`），这些工具可能会截断/过滤掉前两行，从而导致输出里看不到 `WHAT/WHY`。
+默认 `header_timing = tail`（即 WHAT/WHY 在命令输出后）。如果希望前置输出，可执行：
+
+```bash
+shnote config set header_timing head
+```
+
+> 注意：如果你在 `shnote ...` 外层再接管道/过滤（例如 `| tail -5`、`| head -20`、`| grep ...`），这些工具可能会截断/过滤掉 `WHAT/WHY`（默认在输出末尾）。
 > 这不影响 `shnote` 的强制记录：请以实际执行命令里的 `--what` / `--why` 参数为准（它们必须写在子命令前，通常在终端/日志里总能看到）。
 >
 > 另外：`--what/--why` 只允许用于 `run/py/node/pip/npm/npx`，其他命令（如 `config/init/setup/doctor/completions`）不接受这两个参数。
@@ -272,6 +253,8 @@ shnote config set python /usr/bin/python3
 shnote config set shell bash
 shnote config set language zh
 shnote config set header_stream auto
+shnote config set header_timing tail
+shnote config set run_string_shell_mode lc
 shnote config set color false
 shnote config set what_color cyan
 shnote config set why_color magenta
@@ -293,6 +276,8 @@ shnote config path
 | language | 语言 (auto/zh/en) | auto |
 | output | 输出模式 (default/quiet) | default |
 | header_stream | WHAT/WHY 输出流 (auto/stdout/stderr) | auto |
+| header_timing | WHAT/WHY 输出时机 (head/tail/both) | tail |
+| run_string_shell_mode | `run "..."` 执行模式 (lc/ilc) | lc |
 | color | WHAT/WHY 颜色开关 (true/false) | true |
 | what_color | WHAT 颜色 (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | cyan |
 | why_color | WHY 颜色 (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | magenta |
@@ -306,8 +291,6 @@ shnote info
 # 更新到最新版本
 shnote update
 
-# 国内用户可使用代理加速
-GITHUB_PROXY=https://ghfast.top shnote update
 
 # 仅检查更新，不安装
 shnote update --check
@@ -399,7 +382,7 @@ shnote completions powershell | Out-String | Invoke-Expression
 ### Features
 
 - **Mandatory WHAT/WHY**: Execution commands (`run/py/node/pip/npm/npx`) require `--what/--why` flags before the subcommand
-- **Structured Output**: `WHAT:` and `WHY:` are output first for easy parsing
+- **Structured Output**: `WHAT:` and `WHY:` are structured and printed after command output by default (configurable)
 - **Full Passthrough**: Command output is not intercepted/modified (stdout/stderr inherited), users decide how to use pueue
 - **Multi-command Support**: Shell, Python, Node.js, plus `pip/npm/npx` passthrough wrappers
 - **Cross-platform**: Supports macOS, Linux, Windows
@@ -425,13 +408,21 @@ See shnote in action with different AI tools:
 
 #### 1. Install shnote
 
-macOS / Linux:
+Preferred (macOS / Linux, recommended):
 
 ```bash
 curl -fsSL https://shnote.agentsmirror.com/install.sh | sh
 ```
 
 Default install directory is `~/.local/bin`. The installer checks PATH automatically and updates your shell profile when needed.
+
+Windows (PowerShell):
+
+```powershell
+irm https://shnote.agentsmirror.com/install.ps1 | iex
+```
+
+Other recommended installation options (in order):
 
 Homebrew (macOS):
 
@@ -440,29 +431,23 @@ brew tap wangnov/tap
 brew install shnote
 ```
 
-Windows (PowerShell):
-
-```powershell
-irm https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.ps1 | iex
-```
-
-<details>
-<summary>From Source</summary>
+cargo-binstall (cross-platform, downloads prebuilt binaries):
 
 ```bash
-cargo install --path .
+cargo binstall shnote
 ```
 
-</details>
+If `cargo-binstall` is not installed yet, run:
 
-<details>
-<summary>Install via Cargo (crates.io)</summary>
+```bash
+cargo install cargo-binstall
+```
+
+Cargo (crates.io, local build):
 
 ```bash
 cargo install shnote
 ```
-
-</details>
 
 #### 2. Initialize AI Tools (Required)
 
@@ -510,8 +495,8 @@ Therefore, we must use memory files (rules/CLAUDE.md) for prompt engineering, te
 
 **Why pueue?**
 
-- **Codex CLI / Gemini CLI**: No built-in background task support. Long-running commands block the AI and must be run via pueue
-- **Claude Code**: pueue is optional. Claude Code has better built-in solutions (Background Bash and Async SubAgent)
+- **Gemini CLI**: pueue is usually recommended for long-running background tasks
+- **Claude Code / Codex CLI**: built-in background features are usually sufficient, so pueue is optional
 
 Install pueue:
 
@@ -527,7 +512,7 @@ export PATH="$HOME/.shnote/bin:$PATH"
 ```
 
 <details>
-<summary>📸 pueue Usage Example (Codex CLI)</summary>
+<summary>📸 pueue Usage Example (Historical Screenshot)</summary>
 
 <img src="assets/English_pueue_codex.png" alt="pueue usage example" width="100%">
 
@@ -580,12 +565,18 @@ shnote --what "Background build" --why "Compile large project" run pueue add -- 
 ### Output Format
 
 ```
+<actual command output...>
 WHAT: List files
 WHY:  Check project structure
-<actual command output...>
 ```
 
-> Note: If you pipe `shnote ...` through filters like `| tail -5`, `| head -20`, or `| grep ...`, these tools may truncate/filter the first two lines, hiding the `WHAT/WHY` output.
+Default `header_timing = tail` (WHAT/WHY appear after command output). To print them first:
+
+```bash
+shnote config set header_timing head
+```
+
+> Note: If you pipe `shnote ...` through filters like `| tail -5`, `| head -20`, or `| grep ...`, these tools may truncate/filter the `WHAT/WHY` output (default appears at the end).
 > This doesn't affect shnote's mandatory documentation: the `--what` / `--why` parameters in the actual command line (which must appear before the subcommand) are always visible in the terminal/logs.
 >
 > Also: `--what/--why` are only allowed for `run/py/node/pip/npm/npx`. Other commands (`config/init/setup/doctor/completions`) don't accept these parameters.
@@ -611,6 +602,8 @@ shnote config set python /usr/bin/python3
 shnote config set shell bash
 shnote config set language en
 shnote config set header_stream auto
+shnote config set header_timing tail
+shnote config set run_string_shell_mode lc
 shnote config set color false
 shnote config set what_color cyan
 shnote config set why_color magenta
@@ -632,6 +625,8 @@ shnote config path
 | language | Language (auto/zh/en) | auto |
 | output | Output mode (default/quiet) | default |
 | header_stream | WHAT/WHY output stream (auto/stdout/stderr) | auto |
+| header_timing | WHAT/WHY timing (head/tail/both) | tail |
+| run_string_shell_mode | `run "..."` mode (lc/ilc) | lc |
 | color | Colorize WHAT/WHY header (true/false) | true |
 | what_color | WHAT color (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | cyan |
 | why_color | WHY color (default/black/red/green/yellow/blue/magenta/cyan/white/bright_*) | magenta |
