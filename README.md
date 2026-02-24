@@ -61,8 +61,10 @@
 macOS / Linux:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.sh | sh
+curl -fsSL https://shnote.agentsmirror.com/install.sh | sh
 ```
+
+默认安装目录为 `~/.local/bin`，安装器会自动检查 PATH；若未包含该目录，会自动写入你的 shell 配置文件。
 
 Homebrew (macOS):
 
@@ -85,7 +87,7 @@ irm https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.
 macOS / Linux:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://ghfast.top/https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.sh | sh
+curl -fsSL https://shnote.agentsmirror.com/install.sh | sh
 ```
 
 Windows (PowerShell):
@@ -426,8 +428,10 @@ See shnote in action with different AI tools:
 macOS / Linux:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/wangnov/shnote/releases/latest/download/shnote-installer.sh | sh
+curl -fsSL https://shnote.agentsmirror.com/install.sh | sh
 ```
+
+Default install directory is `~/.local/bin`. The installer checks PATH automatically and updates your shell profile when needed.
 
 Homebrew (macOS):
 

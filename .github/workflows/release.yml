@@ -204,6 +204,10 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
 
           cp dist-manifest.json "$BUILD_MANIFEST_NAME"
+      - name: Customize shell installer success banner
+        shell: bash
+        run: |
+          ./scripts/customize_dist_installers.sh target/distrib/shnote-installer.sh
       - name: "Upload artifacts"
         uses: actions/upload-artifact@v4
         with:

@@ -12,7 +12,7 @@ installers = ["shell", "powershell", "homebrew"]
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "aarch64-unknown-linux-musl", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-musl", "x86_64-pc-windows-msvc"]
 # Path that installers should place binaries in
-install-path = "CARGO_HOME"
+install-path = "~/.local/bin/"
 # Where to host releases
 hosting = "github"
 # A GitHub repo to push Homebrew formulas to
