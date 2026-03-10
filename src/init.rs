@@ -551,7 +551,7 @@ mod tests {
         let _lock = env_lock();
         let temp_dir = TempDir::new().unwrap();
         let script = temp_dir.path().join("stderr-tool");
-        write_executable(&script, "#!/bin/sh\necho 'version 1.2.3' >&2\nexit 0\n").unwrap();
+        write_executable(&script, "#!/bin/sh\necho \"version 1.2.3\" 1>&2\nexit 0\n").unwrap();
 
         let result = get_tool_version(&script, "--version");
         assert_eq!(result, Some("version 1.2.3".to_string()));
