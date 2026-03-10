@@ -536,6 +536,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn get_tool_version_returns_none_on_nonzero_exit() {
+        let _lock = env_lock();
         let temp_dir = TempDir::new().unwrap();
         let script = temp_dir.path().join("fail-tool");
         write_executable(&script, "#!/bin/sh\necho 'version 1.0.0'\nexit 1\n").unwrap();
@@ -547,6 +548,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn get_tool_version_uses_stderr_when_stdout_empty() {
+        let _lock = env_lock();
         let temp_dir = TempDir::new().unwrap();
         let script = temp_dir.path().join("stderr-tool");
         write_executable(&script, "#!/bin/sh\necho 'version 1.2.3' >&2\nexit 0\n").unwrap();
@@ -557,6 +559,7 @@ mod tests {
 
     #[test]
     fn get_tool_version_returns_none_when_command_cannot_execute() {
+        let _lock = env_lock();
         let result = get_tool_version(&PathBuf::from("/nonexistent/tool"), "--version");
         assert!(result.is_none());
     }

@@ -2,7 +2,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 
-/// Global lock for tests that mutate process-wide environment variables.
+/// Global lock for tests that mutate process-wide environment variables or current directory.
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 pub fn env_lock() -> MutexGuard<'static, ()> {

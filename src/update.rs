@@ -358,14 +358,14 @@ fn download_file(i18n: &I18n, url: &str, dest: &PathBuf) -> Result<()> {
             .arg(url)
             .status();
 
-        return match wget_status {
+        match wget_status {
             Ok(status) if status.success() => Ok(()),
             Ok(_) => Err(anyhow::anyhow!("{}", i18n.err_download_failed())),
             Err(err) => match curl_status {
                 Ok(_) => Err(anyhow::anyhow!("{}", i18n.err_download_failed())),
                 Err(_) => Err(err).context(i18n.err_download_no_tool()),
             },
-        };
+        }
     }
 
     #[cfg(windows)]
