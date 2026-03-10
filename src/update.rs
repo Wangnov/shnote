@@ -1,10 +1,13 @@
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
+use std::fs::File;
 use std::io::{self, BufRead, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Deserializer};
 
 use crate::cli::{InitTarget, UpdateArgs};
 use crate::config::home_dir;
@@ -12,15 +15,71 @@ use crate::i18n::I18n;
 use crate::info::{get_install_path, PLATFORM, REPO, VERSION};
 use crate::init::{rules_for_target_with_pueue, SHNOTE_MARKER_END, SHNOTE_MARKER_START};
 
-/// URL pattern for VERSION file
-const VERSION_URL: &str = "https://github.com/{repo}/releases/latest/download/VERSION";
+/// URL pattern for cargo-dist manifest
+const DIST_MANIFEST_URL: &str =
+    "https://github.com/{repo}/releases/latest/download/dist-manifest.json";
 
-/// URL pattern for binary download
-const BINARY_URL: &str = "https://github.com/{repo}/releases/download/{version}/shnote-{platform}";
+#[derive(Debug, Deserialize)]
+struct DistManifest {
+    announcement_tag: String,
+    #[serde(default, deserialize_with = "deserialize_artifacts")]
+    artifacts: Vec<DistArtifact>,
+}
 
-/// URL pattern for checksum download
-const CHECKSUM_URL: &str =
-    "https://github.com/{repo}/releases/download/{version}/shnote-{platform}.sha256";
+#[derive(Debug, Deserialize)]
+struct DistArtifact {
+    name: String,
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    target_triples: Vec<String>,
+    #[serde(default)]
+    checksums: DistChecksums,
+    #[serde(default)]
+    assets: Vec<DistAsset>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct DistChecksums {
+    #[serde(default)]
+    sha256: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct DistAsset {
+    #[serde(default)]
+    kind: String,
+    #[serde(default)]
+    path: String,
+}
+
+#[derive(Debug, Clone)]
+struct LatestRelease {
+    version: String,
+    tag: String,
+    archive_name: String,
+    archive_sha256: String,
+    executable_path: String,
+}
+
+fn deserialize_artifacts<'de, D>(
+    deserializer: D,
+) -> std::result::Result<Vec<DistArtifact>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum ArtifactsRepr {
+        List(Vec<DistArtifact>),
+        Map(BTreeMap<String, DistArtifact>),
+    }
+
+    match ArtifactsRepr::deserialize(deserializer)? {
+        ArtifactsRepr::List(artifacts) => Ok(artifacts),
+        ArtifactsRepr::Map(artifacts) => Ok(artifacts.into_values().collect()),
+    }
+}
 
 pub fn run_update(i18n: &I18n, args: UpdateArgs) -> Result<()> {
     println!("{}", i18n.update_checking());
@@ -29,21 +88,27 @@ pub fn run_update(i18n: &I18n, args: UpdateArgs) -> Result<()> {
     let current_version = VERSION;
     println!("  {}: v{}", i18n.update_current_version(), current_version);
 
-    // Fetch latest version
-    let latest_version = fetch_latest_version(i18n)?;
-    let latest_version = latest_version.trim().trim_start_matches('v');
-    println!("  {}: v{}", i18n.update_latest_version(), latest_version);
+    // Fetch latest release metadata
+    let latest_release = fetch_latest_release(i18n)?;
+    println!(
+        "  {}: v{}",
+        i18n.update_latest_version(),
+        latest_release.version
+    );
     println!();
 
     // Compare versions
-    if current_version == latest_version && !args.force {
+    if current_version == latest_release.version && !args.force {
         println!("{}", i18n.update_already_latest());
         return Ok(());
     }
 
     if args.check {
-        if current_version != latest_version {
-            println!("{}", i18n.update_available(&format!("v{}", latest_version)));
+        if current_version != latest_release.version {
+            println!(
+                "{}",
+                i18n.update_available(&format!("v{}", latest_release.version))
+            );
         }
         return Ok(());
     }
@@ -51,15 +116,18 @@ pub fn run_update(i18n: &I18n, args: UpdateArgs) -> Result<()> {
     // Download and install
     println!(
         "{}",
-        i18n.update_downloading(&format!("v{}", latest_version))
+        i18n.update_downloading(&format!("v{}", latest_release.version))
     );
 
     let install_path = get_install_path().context(i18n.update_err_install_path())?;
 
-    download_and_install(i18n, latest_version, &install_path)?;
+    download_and_install(i18n, &latest_release, &install_path)?;
 
     println!();
-    println!("{}", i18n.update_success(&format!("v{}", latest_version)));
+    println!(
+        "{}",
+        i18n.update_success(&format!("v{}", latest_release.version))
+    );
     println!();
 
     check_rules_after_update(i18n, &install_path)?;
@@ -67,9 +135,9 @@ pub fn run_update(i18n: &I18n, args: UpdateArgs) -> Result<()> {
     Ok(())
 }
 
-fn fetch_latest_version(i18n: &I18n) -> Result<String> {
+fn fetch_latest_release(i18n: &I18n) -> Result<LatestRelease> {
     let github_proxy = env::var("GITHUB_PROXY").ok();
-    let url = VERSION_URL.replace("{repo}", REPO);
+    let url = DIST_MANIFEST_URL.replace("{repo}", REPO);
     let url = apply_github_proxy(&github_proxy, &url);
 
     if let Some(proxy) = &github_proxy {
@@ -77,58 +145,115 @@ fn fetch_latest_version(i18n: &I18n) -> Result<String> {
     }
 
     let temp_dir = tempfile::tempdir().context(i18n.update_err_temp_dir())?;
-    let version_file = temp_dir.path().join("VERSION");
+    let manifest_file = temp_dir.path().join("dist-manifest.json");
 
-    download_file(i18n, &url, &version_file)?;
+    download_file(i18n, &url, &manifest_file)?;
 
-    let content = fs::read_to_string(&version_file).context(i18n.update_err_read_version())?;
+    let content = fs::read_to_string(&manifest_file).context(i18n.update_err_read_version())?;
 
-    Ok(content)
+    latest_release_from_manifest(&content, PLATFORM, i18n)
 }
 
-fn download_and_install(i18n: &I18n, version: &str, install_path: &PathBuf) -> Result<()> {
+fn parse_dist_manifest(json: &str, i18n: &I18n) -> Result<DistManifest> {
+    serde_json::from_str(json).context(i18n.update_err_parse_manifest())
+}
+
+fn latest_release_from_manifest(json: &str, platform: &str, i18n: &I18n) -> Result<LatestRelease> {
+    let manifest = parse_dist_manifest(json, i18n)?;
+    let artifact = select_platform_artifact(&manifest, platform, i18n)?;
+    let executable_path = artifact_executable_path(artifact, i18n)?;
+    let tag = manifest.announcement_tag.trim().to_string();
+    let version = tag.trim_start_matches('v').to_string();
+
+    Ok(LatestRelease {
+        version,
+        tag,
+        archive_name: artifact.name.clone(),
+        archive_sha256: artifact.checksums.sha256.clone(),
+        executable_path: executable_path.to_string(),
+    })
+}
+
+fn select_platform_artifact<'a>(
+    manifest: &'a DistManifest,
+    platform: &str,
+    i18n: &I18n,
+) -> Result<&'a DistArtifact> {
+    manifest
+        .artifacts
+        .iter()
+        .find(|artifact| {
+            artifact
+                .target_triples
+                .iter()
+                .any(|triple| triple == platform)
+                && (artifact.kind == "executable-zip"
+                    || artifact
+                        .assets
+                        .iter()
+                        .any(|asset| asset.kind == "executable" && !asset.path.is_empty()))
+        })
+        .with_context(|| i18n.update_err_platform_artifact(platform))
+}
+
+fn artifact_executable_path<'a>(artifact: &'a DistArtifact, i18n: &I18n) -> Result<&'a str> {
+    let executable = artifact
+        .assets
+        .iter()
+        .find(|asset| asset.kind == "executable" && !asset.path.is_empty())
+        .context(i18n.update_err_executable_asset())?;
+
+    Ok(executable.path.as_str())
+}
+
+fn download_and_install(
+    i18n: &I18n,
+    release: &LatestRelease,
+    install_path: &PathBuf,
+) -> Result<()> {
     let github_proxy = env::var("GITHUB_PROXY").ok();
 
-    // Build download URLs
-    let version_tag = format!("v{}", version);
-    let binary_name = get_binary_name();
-
-    let binary_url = BINARY_URL
-        .replace("{repo}", REPO)
-        .replace("{version}", &version_tag)
-        .replace("{platform}", PLATFORM);
-    let binary_url = apply_github_proxy(&github_proxy, &binary_url);
-
-    let checksum_url = CHECKSUM_URL
-        .replace("{repo}", REPO)
-        .replace("{version}", &version_tag)
-        .replace("{platform}", PLATFORM);
-    let checksum_url = apply_github_proxy(&github_proxy, &checksum_url);
+    let archive_url = format!(
+        "https://github.com/{repo}/releases/download/{tag}/{archive}",
+        repo = REPO,
+        tag = release.tag,
+        archive = release.archive_name
+    );
+    let archive_url = apply_github_proxy(&github_proxy, &archive_url);
 
     // Create temp directory
     let temp_dir = tempfile::tempdir().context(i18n.update_err_temp_dir())?;
-    let temp_binary = temp_dir.path().join(&binary_name);
-    let temp_checksum = temp_dir.path().join(format!("{}.sha256", binary_name));
+    let temp_archive = temp_dir.path().join(&release.archive_name);
+    let extracted_name = Path::new(&release.executable_path)
+        .file_name()
+        .context(i18n.update_err_executable_asset())?;
+    let temp_binary = temp_dir.path().join(extracted_name);
 
-    // Download binary and checksum
-    download_file(i18n, &binary_url, &temp_binary)?;
-    download_file(i18n, &checksum_url, &temp_checksum)?;
+    // Download archive
+    download_file(i18n, &archive_url, &temp_archive)?;
 
     // Verify checksum
     println!("  {}", i18n.update_verifying());
-    let expected_hash = read_checksum_file(&temp_checksum)?;
-    let actual_hash = compute_sha256(i18n, &temp_binary)?;
+    let actual_hash = compute_sha256(i18n, &temp_archive)?;
 
-    if actual_hash != expected_hash {
+    if actual_hash != release.archive_sha256 {
         anyhow::bail!(
             "{}",
             i18n.err_checksum_mismatch(
-                &temp_binary.display().to_string(),
-                &expected_hash,
+                &temp_archive.display().to_string(),
+                &release.archive_sha256,
                 &actual_hash
             )
         );
     }
+
+    extract_binary_from_archive(
+        &temp_archive,
+        &release.archive_name,
+        &release.executable_path,
+        &temp_binary,
+        i18n,
+    )?;
 
     // Replace binary
     println!("  {}", i18n.update_installing());
@@ -137,15 +262,65 @@ fn download_and_install(i18n: &I18n, version: &str, install_path: &PathBuf) -> R
     Ok(())
 }
 
-fn get_binary_name() -> String {
-    #[cfg(windows)]
-    {
-        format!("shnote-{}.exe", PLATFORM)
+fn extract_binary_from_archive(
+    archive_path: &Path,
+    archive_name: &str,
+    entry_path: &str,
+    out_path: &Path,
+    i18n: &I18n,
+) -> Result<()> {
+    if archive_name.ends_with(".tar.xz") {
+        return extract_binary_from_tar_xz(archive_path, entry_path, out_path, i18n);
     }
-    #[cfg(not(windows))]
-    {
-        format!("shnote-{}", PLATFORM)
+    if archive_name.ends_with(".zip") {
+        return extract_binary_from_zip(archive_path, entry_path, out_path, i18n);
     }
+
+    anyhow::bail!("{}", i18n.update_err_extract_archive());
+}
+
+fn extract_binary_from_tar_xz(
+    archive_path: &Path,
+    entry_path: &str,
+    out_path: &Path,
+    i18n: &I18n,
+) -> Result<()> {
+    let file = File::open(archive_path).context(i18n.update_err_extract_archive())?;
+    let decoder = xz2::read::XzDecoder::new(file);
+    let mut archive = tar::Archive::new(decoder);
+
+    for entry in archive
+        .entries()
+        .context(i18n.update_err_extract_archive())?
+    {
+        let mut entry = entry.context(i18n.update_err_extract_archive())?;
+        let path = entry.path().context(i18n.update_err_extract_archive())?;
+        if path == Path::new(entry_path) {
+            entry
+                .unpack(out_path)
+                .context(i18n.update_err_extract_archive())?;
+            return Ok(());
+        }
+    }
+
+    anyhow::bail!("{}", i18n.update_err_executable_asset())
+}
+
+fn extract_binary_from_zip(
+    archive_path: &Path,
+    entry_path: &str,
+    out_path: &Path,
+    i18n: &I18n,
+) -> Result<()> {
+    let file = File::open(archive_path).context(i18n.update_err_extract_archive())?;
+    let mut archive = zip::ZipArchive::new(file).context(i18n.update_err_extract_archive())?;
+    let mut entry = archive
+        .by_name(entry_path)
+        .context(i18n.update_err_executable_asset())?;
+    let mut out = File::create(out_path).context(i18n.update_err_extract_archive())?;
+    io::copy(&mut entry, &mut out).context(i18n.update_err_extract_archive())?;
+
+    Ok(())
 }
 
 fn apply_github_proxy(proxy: &Option<String>, url: &str) -> String {
@@ -162,14 +337,14 @@ fn download_file(i18n: &I18n, url: &str, dest: &PathBuf) -> Result<()> {
     #[cfg(unix)]
     {
         // Try curl first
-        let status = Command::new("curl")
+        let curl_status = Command::new("curl")
             .args(["-fsSL", "-o"])
             .arg(dest)
             .arg(url)
             .stderr(Stdio::inherit())
             .status();
 
-        match status {
+        match &curl_status {
             Ok(s) if s.success() => {
                 return Ok(());
             }
@@ -177,16 +352,20 @@ fn download_file(i18n: &I18n, url: &str, dest: &PathBuf) -> Result<()> {
         }
 
         // Try wget as fallback
-        let status = Command::new("wget")
+        let wget_status = Command::new("wget")
             .args(["-q", "-O"])
             .arg(dest)
             .arg(url)
-            .status()
-            .context(i18n.err_download_no_tool())?;
+            .status();
 
-        if !status.success() {
-            anyhow::bail!("{}", i18n.err_download_failed());
-        }
+        return match wget_status {
+            Ok(status) if status.success() => Ok(()),
+            Ok(_) => Err(anyhow::anyhow!("{}", i18n.err_download_failed())),
+            Err(err) => match curl_status {
+                Ok(_) => Err(anyhow::anyhow!("{}", i18n.err_download_failed())),
+                Err(_) => Err(err).context(i18n.err_download_no_tool()),
+            },
+        };
     }
 
     #[cfg(windows)]
@@ -206,19 +385,12 @@ fn download_file(i18n: &I18n, url: &str, dest: &PathBuf) -> Result<()> {
         if !status.success() {
             anyhow::bail!("{}", i18n.err_download_failed());
         }
+
+        return Ok(());
     }
 
+    #[cfg(not(any(unix, windows)))]
     Ok(())
-}
-
-fn read_checksum_file(path: &PathBuf) -> Result<String> {
-    let content = fs::read_to_string(path)?;
-    // Format: "hash  filename" or just "hash"
-    Ok(content
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_lowercase())
 }
 
 fn compute_sha256(i18n: &I18n, path: &PathBuf) -> Result<String> {
@@ -570,6 +742,32 @@ mod tests {
     use std::io::Cursor;
     use tempfile::TempDir;
 
+    const DIST_MANIFEST_FIXTURE: &str = r#"{
+        "announcement_tag": "v0.3.1",
+        "artifacts": [
+            {
+                "name": "sha256.sum",
+                "kind": "unified-checksum"
+            },
+            {
+                "name": "shnote-x86_64-apple-darwin.tar.xz",
+                "target_triples": ["x86_64-apple-darwin"],
+                "checksums": { "sha256": "deadbeef" },
+                "assets": [
+                    { "kind": "executable", "path": "shnote" }
+                ]
+            },
+            {
+                "name": "shnote-x86_64-pc-windows-msvc.zip",
+                "target_triples": ["x86_64-pc-windows-msvc"],
+                "checksums": { "sha256": "feedface" },
+                "assets": [
+                    { "kind": "executable", "path": "shnote.exe" }
+                ]
+            }
+        ]
+    }"#;
+
     #[test]
     fn apply_github_proxy_without_proxy() {
         let url = "https://github.com/example/file";
@@ -597,29 +795,63 @@ mod tests {
     }
 
     #[test]
-    fn get_binary_name_is_platform_specific() {
-        let name = get_binary_name();
-        assert!(name.starts_with("shnote-"));
-        #[cfg(windows)]
-        assert!(name.ends_with(".exe"));
-        #[cfg(not(windows))]
-        assert!(!name.ends_with(".exe"));
+    fn parse_dist_manifest_reads_latest_tag() {
+        let i18n = I18n::new(Lang::En);
+        let manifest = parse_dist_manifest(DIST_MANIFEST_FIXTURE, &i18n).unwrap();
+        assert_eq!(manifest.announcement_tag, "v0.3.1");
     }
 
     #[test]
-    fn read_checksum_file_parses_hash() {
-        use tempfile::TempDir;
+    fn select_platform_artifact_picks_matching_target() {
+        let i18n = I18n::new(Lang::En);
+        let manifest = parse_dist_manifest(DIST_MANIFEST_FIXTURE, &i18n).unwrap();
+        let artifact = select_platform_artifact(&manifest, "x86_64-apple-darwin", &i18n).unwrap();
+        assert_eq!(artifact.name, "shnote-x86_64-apple-darwin.tar.xz");
+    }
 
-        let temp_dir = TempDir::new().unwrap();
-        let checksum_file = temp_dir.path().join("test.sha256");
+    #[test]
+    fn latest_release_from_manifest_reads_tag_and_archive() {
+        let i18n = I18n::new(Lang::En);
+        let release =
+            latest_release_from_manifest(DIST_MANIFEST_FIXTURE, "x86_64-apple-darwin", &i18n)
+                .unwrap();
+        assert_eq!(release.version, "0.3.1");
+        assert_eq!(release.tag, "v0.3.1");
+        assert_eq!(release.archive_name, "shnote-x86_64-apple-darwin.tar.xz");
+        assert_eq!(release.archive_sha256, "deadbeef");
+        assert_eq!(release.executable_path, "shnote");
+    }
 
-        // Test "hash  filename" format
-        fs::write(&checksum_file, "abc123def456  shnote-platform").unwrap();
-        assert_eq!(read_checksum_file(&checksum_file).unwrap(), "abc123def456");
+    #[test]
+    fn latest_release_from_manifest_reports_missing_platform() {
+        let i18n = I18n::new(Lang::En);
+        let err =
+            latest_release_from_manifest(DIST_MANIFEST_FIXTURE, "thumbv7em-none-eabihf", &i18n)
+                .unwrap_err();
+        assert!(err.to_string().contains("thumbv7em-none-eabihf"));
+    }
 
-        // Test "hash" only format
-        fs::write(&checksum_file, "ABC123DEF456").unwrap();
-        assert_eq!(read_checksum_file(&checksum_file).unwrap(), "abc123def456");
+    #[test]
+    fn latest_release_from_manifest_reports_missing_executable_asset() {
+        let i18n = I18n::new(Lang::En);
+        let err = latest_release_from_manifest(
+            r#"{
+                "announcement_tag": "v0.3.1",
+                "artifacts": [
+                    {
+                        "name": "shnote-x86_64-apple-darwin.tar.xz",
+                        "kind": "executable-zip",
+                        "target_triples": ["x86_64-apple-darwin"],
+                        "checksums": { "sha256": "deadbeef" },
+                        "assets": []
+                    }
+                ]
+            }"#,
+            "x86_64-apple-darwin",
+            &i18n,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("executable"));
     }
 
     #[test]
@@ -664,6 +896,44 @@ mod tests {
     fn prompt_yes_no_with_reader_rejects_default() {
         let mut input = Cursor::new("\n");
         assert!(!prompt_yes_no_with_reader("ok?", &mut input).unwrap());
+    }
+
+    #[test]
+    fn extract_binary_from_tar_xz_uses_manifest_asset_path() {
+        let i18n = I18n::new(Lang::En);
+        let temp_dir = TempDir::new().unwrap();
+        let archive = write_tar_xz_fixture(&temp_dir, "shnote", b"unix-binary");
+        let out = temp_dir.path().join("shnote-out");
+
+        extract_binary_from_archive(
+            &archive,
+            "shnote-aarch64-apple-darwin.tar.xz",
+            "shnote",
+            &out,
+            &i18n,
+        )
+        .unwrap();
+
+        assert_eq!(fs::read(&out).unwrap(), b"unix-binary");
+    }
+
+    #[test]
+    fn extract_binary_from_zip_uses_manifest_asset_path() {
+        let i18n = I18n::new(Lang::En);
+        let temp_dir = TempDir::new().unwrap();
+        let archive = write_zip_fixture(&temp_dir, "shnote.exe", b"windows-binary");
+        let out = temp_dir.path().join("shnote.exe");
+
+        extract_binary_from_archive(
+            &archive,
+            "shnote-x86_64-pc-windows-msvc.zip",
+            "shnote.exe",
+            &out,
+            &i18n,
+        )
+        .unwrap();
+
+        assert_eq!(fs::read(&out).unwrap(), b"windows-binary");
     }
 
     #[cfg(unix)]
@@ -747,14 +1017,38 @@ mod tests {
         let tools_dir = temp_dir.path().join("tools");
         fs::create_dir_all(&tools_dir).unwrap();
 
-        let curl = tools_dir.join("curl");
-        write_executable(&curl, "#!/bin/sh\nexit 1\n").unwrap();
-
         let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
 
         let out = temp_dir.path().join("out.txt");
         let err = download_file(&i18n, "https://example.invalid/file", &out).unwrap_err();
         assert!(err.to_string().contains(i18n.err_download_no_tool()));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn download_file_keeps_primary_error_when_wget_missing() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let tools_dir = temp_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+
+        let curl = tools_dir.join("curl");
+        write_executable(
+            &curl,
+            "#!/bin/sh\n\
+            echo 'curl: (56) The requested URL returned error: 404' >&2\n\
+            exit 56\n",
+        )
+        .unwrap();
+
+        let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
+
+        let out = temp_dir.path().join("out.txt");
+        let err = download_file(&i18n, "https://example.invalid/file", &out).unwrap_err();
+        assert!(err.to_string().contains(i18n.err_download_failed()));
+        assert!(!err.to_string().contains(i18n.err_download_no_tool()));
     }
 
     #[cfg(unix)]
@@ -780,7 +1074,63 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn download_and_install_writes_binary() {
+    fn fetch_latest_release_downloads_manifest_and_selects_platform_artifact() {
+        let _lock = env_lock();
+        let i18n = I18n::new(Lang::En);
+
+        let temp_dir = TempDir::new().unwrap();
+        let tools_dir = temp_dir.path().join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+        let manifest = format!(
+            r#"{{
+                "announcement_tag": "v0.3.1",
+                "artifacts": [
+                    {{
+                        "name": "shnote-{platform}.tar.xz",
+                        "target_triples": ["{platform}"],
+                        "checksums": {{ "sha256": "deadbeef" }},
+                        "assets": [
+                            {{ "kind": "executable", "path": "shnote" }}
+                        ]
+                    }}
+                ]
+            }}"#,
+            platform = PLATFORM
+        );
+
+        let curl = tools_dir.join("curl");
+        write_executable(
+            &curl,
+            &format!(
+                "#!/bin/sh\n\
+                dest=\"\"\n\
+                while [ \"$1\" != \"\" ]; do\n\
+                  if [ \"$1\" = \"-o\" ]; then\n\
+                    shift\n\
+                    dest=\"$1\"\n\
+                  fi\n\
+                  shift\n\
+                done\n\
+                /bin/cat <<'EOF' > \"$dest\"\n\
+                {}\n\
+                EOF\n\
+                exit 0\n",
+                manifest
+            ),
+        )
+        .unwrap();
+
+        let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
+
+        let release = fetch_latest_release(&i18n).unwrap();
+        assert_eq!(release.version, "0.3.1");
+        assert_eq!(release.archive_name, format!("shnote-{PLATFORM}.tar.xz"));
+        assert_eq!(release.executable_path, "shnote");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn download_and_install_writes_extracted_binary() {
         let _lock = env_lock();
         let i18n = I18n::new(Lang::En);
 
@@ -788,36 +1138,45 @@ mod tests {
         let tools_dir = temp_dir.path().join("tools");
         fs::create_dir_all(&tools_dir).unwrap();
 
+        let archive = write_tar_xz_fixture(&temp_dir, "shnote", b"binary");
         let curl = tools_dir.join("curl");
         write_executable(
             &curl,
-            "#!/bin/sh\n\
-            dest=\"\"\n\
-            while [ \"$1\" != \"\" ]; do\n\
-              if [ \"$1\" = \"-o\" ]; then\n\
-                shift\n\
-                dest=\"$1\"\n\
-              fi\n\
-              shift\n\
-            done\n\
-            case \"$dest\" in\n\
-              *.sha256) printf \"deadbeef\" > \"$dest\" ;;\n\
-              *) printf \"binary\" > \"$dest\" ;;\n\
-            esac\n\
-            exit 0\n",
+            &format!(
+                "#!/bin/sh\n\
+                dest=\"\"\n\
+                while [ \"$1\" != \"\" ]; do\n\
+                  if [ \"$1\" = \"-o\" ]; then\n\
+                    shift\n\
+                    dest=\"$1\"\n\
+                  fi\n\
+                  shift\n\
+                done\n\
+                /bin/cp \"{}\" \"$dest\"\n\
+                exit 0\n",
+                archive.display()
+            ),
         )
         .unwrap();
 
         let shasum = tools_dir.join("shasum");
-        write_executable(&shasum, "#!/bin/sh\necho \"deadbeef  $2\"\nexit 0\n").unwrap();
+        write_executable(&shasum, "#!/bin/sh\necho \"archivehash  $2\"\nexit 0\n").unwrap();
 
         let _path_guard = EnvVarGuard::set("PATH", &tools_dir);
 
         let install_dir = TempDir::new().unwrap();
         let install_path = install_dir.path().join("shnote");
-        download_and_install(&i18n, "0.0.0", &install_path).unwrap();
+        let release = LatestRelease {
+            version: "0.3.1".to_string(),
+            tag: "v0.3.1".to_string(),
+            archive_name: "shnote-x86_64-apple-darwin.tar.xz".to_string(),
+            archive_sha256: "archivehash".to_string(),
+            executable_path: "shnote".to_string(),
+        };
 
-        assert_eq!(fs::read_to_string(&install_path).unwrap(), "binary");
+        download_and_install(&i18n, &release, &install_path).unwrap();
+
+        assert_eq!(fs::read(&install_path).unwrap(), b"binary");
     }
 
     #[cfg(unix)]
@@ -830,23 +1189,24 @@ mod tests {
         let tools_dir = temp_dir.path().join("tools");
         fs::create_dir_all(&tools_dir).unwrap();
 
+        let archive = write_tar_xz_fixture(&temp_dir, "shnote", b"binary");
         let curl = tools_dir.join("curl");
         write_executable(
             &curl,
-            "#!/bin/sh\n\
-            dest=\"\"\n\
-            while [ \"$1\" != \"\" ]; do\n\
-              if [ \"$1\" = \"-o\" ]; then\n\
-                shift\n\
-                dest=\"$1\"\n\
-              fi\n\
-              shift\n\
-            done\n\
-            case \"$dest\" in\n\
-              *.sha256) printf \"deadbeef\" > \"$dest\" ;;\n\
-              *) printf \"binary\" > \"$dest\" ;;\n\
-            esac\n\
-            exit 0\n",
+            &format!(
+                "#!/bin/sh\n\
+                dest=\"\"\n\
+                while [ \"$1\" != \"\" ]; do\n\
+                  if [ \"$1\" = \"-o\" ]; then\n\
+                    shift\n\
+                    dest=\"$1\"\n\
+                  fi\n\
+                  shift\n\
+                done\n\
+                /bin/cp \"{}\" \"$dest\"\n\
+                exit 0\n",
+                archive.display()
+            ),
         )
         .unwrap();
 
@@ -857,7 +1217,15 @@ mod tests {
 
         let install_dir = TempDir::new().unwrap();
         let install_path = install_dir.path().join("shnote");
-        let err = download_and_install(&i18n, "0.0.0", &install_path).unwrap_err();
+        let release = LatestRelease {
+            version: "0.3.1".to_string(),
+            tag: "v0.3.1".to_string(),
+            archive_name: "shnote-x86_64-apple-darwin.tar.xz".to_string(),
+            archive_sha256: "archivehash".to_string(),
+            executable_path: "shnote".to_string(),
+        };
+
+        let err = download_and_install(&i18n, &release, &install_path).unwrap_err();
         assert!(err.to_string().contains("checksum"));
     }
 
@@ -930,5 +1298,34 @@ mod tests {
 
         let mut input = Cursor::new("n\n");
         check_rules_after_update_with_reader(&i18n, &binary_path, &mut input).unwrap();
+    }
+
+    fn write_tar_xz_fixture(temp_dir: &TempDir, entry_path: &str, contents: &[u8]) -> PathBuf {
+        let archive_path = temp_dir.path().join("fixture.tar.xz");
+        let file = File::create(&archive_path).unwrap();
+        let encoder = xz2::write::XzEncoder::new(file, 6);
+        let mut builder = tar::Builder::new(encoder);
+        let mut header = tar::Header::new_gnu();
+        header.set_path(entry_path).unwrap();
+        header.set_size(contents.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        builder.append(&header, contents).unwrap();
+        let encoder = builder.into_inner().unwrap();
+        encoder.finish().unwrap();
+        archive_path
+    }
+
+    fn write_zip_fixture(temp_dir: &TempDir, entry_path: &str, contents: &[u8]) -> PathBuf {
+        let archive_path = temp_dir.path().join("fixture.zip");
+        let file = File::create(&archive_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored)
+            .unix_permissions(0o755);
+        writer.start_file(entry_path, options).unwrap();
+        writer.write_all(contents).unwrap();
+        writer.finish().unwrap();
+        archive_path
     }
 }

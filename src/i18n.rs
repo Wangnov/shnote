@@ -968,8 +968,36 @@ impl I18n {
 
     pub fn update_err_read_version(&self) -> &'static str {
         match self.lang {
-            Lang::En => "failed to read version file",
-            Lang::Zh => "读取版本文件失败",
+            Lang::En => "failed to read release metadata",
+            Lang::Zh => "读取发布元数据失败",
+        }
+    }
+
+    pub fn update_err_parse_manifest(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to parse release manifest",
+            Lang::Zh => "解析发布清单失败",
+        }
+    }
+
+    pub fn update_err_platform_artifact(&self, platform: &str) -> String {
+        match self.lang {
+            Lang::En => format!("no release artifact available for platform: {platform}"),
+            Lang::Zh => format!("当前平台没有可用的发布产物：{platform}"),
+        }
+    }
+
+    pub fn update_err_executable_asset(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to locate executable in release artifact",
+            Lang::Zh => "无法在发布产物中定位可执行文件",
+        }
+    }
+
+    pub fn update_err_extract_archive(&self) -> &'static str {
+        match self.lang {
+            Lang::En => "failed to extract release artifact",
+            Lang::Zh => "解压发布产物失败",
         }
     }
 
@@ -1554,6 +1582,22 @@ mod tests {
 
         assert!(!en.update_err_read_version().is_empty());
         assert!(!zh.update_err_read_version().is_empty());
+
+        assert!(!en.update_err_parse_manifest().is_empty());
+        assert!(!zh.update_err_parse_manifest().is_empty());
+
+        assert!(en
+            .update_err_platform_artifact("x86_64-apple-darwin")
+            .contains("x86_64-apple-darwin"));
+        assert!(zh
+            .update_err_platform_artifact("x86_64-apple-darwin")
+            .contains("x86_64-apple-darwin"));
+
+        assert!(!en.update_err_executable_asset().is_empty());
+        assert!(!zh.update_err_executable_asset().is_empty());
+
+        assert!(!en.update_err_extract_archive().is_empty());
+        assert!(!zh.update_err_extract_archive().is_empty());
 
         assert!(!en.update_err_replace_binary().is_empty());
         assert!(!zh.update_err_replace_binary().is_empty());
